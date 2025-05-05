@@ -1,4 +1,4 @@
-package edu.eci.cvds.proyect.coliseum.persistency.service;
+/*package edu.eci.cvds.proyect.coliseum.persistency.service;
 
 import edu.eci.cvds.proyect.coliseum.persistency.Exception.LoanException;
 import edu.eci.cvds.proyect.coliseum.persistency.dto.DevolutionDto;
@@ -168,3 +168,4 @@ public class LoanService {
 
 
 }
+*/

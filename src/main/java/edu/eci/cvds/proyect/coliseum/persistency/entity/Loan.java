@@ -1,4 +1,4 @@
-package edu.eci.cvds.proyect.coliseum.persistency.entity;
+/*package edu.eci.cvds.proyect.coliseum.persistency.entity;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -62,3 +62,4 @@ public class Loan {
     }
 }
 
+*/

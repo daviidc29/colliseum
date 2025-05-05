@@ -1,6 +1,5 @@
-package edu.eci.cvds.proyect.coliseum.persistency.Exception;
+/*package edu.eci.cvds.proyect.coliseum.persistency.Exception;
 
-import edu.eci.cvds.proyect.coliseum.persistency.entity.Loan;
 
 public class LoanException extends RuntimeException{
 
@@ -54,3 +53,4 @@ public class LoanException extends RuntimeException{
         }
     }
 }
+*/

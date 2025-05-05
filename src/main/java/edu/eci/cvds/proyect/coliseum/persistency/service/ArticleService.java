@@ -60,22 +60,33 @@ public class ArticleService {
             throw new RuntimeException("El articulo no puede ser nulo");
         }
         Integer id = autoIncrement();
-        Article article = new Article(id, articleDto.getName(), articleDto.getArticleStatus());
+        String defaultImage = "/images/" + articleDto.getName().toLowerCase().replaceAll("\\s+", "_") + ".png";
+    
+        Article article = new Article(id, articleDto.getName(), articleDto.getArticleStatus(),articleDto.getDescription(), defaultImage);
+        Article saved = articleRepository.save(article);
+    
         checkStockAndAlert(articleDto.getName());
-        return articleRepository.save(article);
+        checkStatusAndAlert(article); 
+        return saved;
     }
-
-
+    
     public Article update(Integer id, ArticleDto articleDto){
         if (id == null) {
             throw new IllegalArgumentException(ARTICLE_ID_NULL);
         }
-        Article article = articleRepository.findById(id).orElseThrow(() -> new RuntimeException(ARTICLE_ID_NOT_FOUND + id));
-        article.setName(articleDto.getName());
+        Article article = articleRepository.findById(id)
+            .orElseThrow(() -> new RuntimeException(ARTICLE_ID_NOT_FOUND + id));
+    
         article.setArticleStatus(articleDto.getArticleStatus());
+        article.setDescription(articleDto.getDescription());
+        article.setImageUrl("/images/" + articleDto.getName().toLowerCase().replaceAll("\\s+", "_") + ".png");
+    
+        Article updated = articleRepository.save(article);
         checkStockAndAlert(articleDto.getName());
-        return articleRepository.save(article);
+        checkStatusAndAlert(article); 
+        return updated;
     }
+    
 
     public Article delete(Integer id) {
         if (id == null) {
@@ -133,6 +144,16 @@ public class ArticleService {
         }
 
     }
+    private void checkStatusAndAlert(Article article) {
+        String status = article.getArticleStatus();
+        if ("Dañado".equalsIgnoreCase(status) || "RequireMantenimiento".equalsIgnoreCase(status)) {
+            String description = "El artículo \"" + article.getName() + "\" tiene estado: " + status;
+            Alert alert = new Alert(null, article.getName(), description, LocalDateTime.now());
+            alertRepository.save(alert);
+        }
+    }
+    
+
     public long getAvailableCountByName(String name) {
         return articleRepository.findByName(name)
             .orElseThrow(() -> new RuntimeException("Nombre del artículo no encontrado: " + name))
