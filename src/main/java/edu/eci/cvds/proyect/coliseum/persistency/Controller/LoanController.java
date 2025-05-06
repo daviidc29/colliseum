@@ -1,4 +1,4 @@
-package edu.eci.cvds.proyect.coliseum.persistency.controller;
+package edu.eci.cvds.proyect.coliseum.persistency.Controller;
 
 import edu.eci.cvds.proyect.coliseum.persistency.Exception.ArticleException;
 import edu.eci.cvds.proyect.coliseum.persistency.Exception.LoanException;
@@ -76,7 +76,7 @@ public class LoanController {
     }
 
     @PatchMapping("/{id}")
-    public ResponseEntity<?> updateLoan(@PathVariable String id, @RequestBody Map<String, Object> updates) {
+    public ResponseEntity<?> updateLoan(@Valid@PathVariable String id, @Valid@RequestBody Map<String, Object> updates) {
         try {
             loanService.updateLoan(id, updates);
             return ResponseEntity.ok(Collections.singletonMap("message", "Préstamo actualizado correctamente"));

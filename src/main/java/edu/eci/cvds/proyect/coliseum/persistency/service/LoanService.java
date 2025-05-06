@@ -142,20 +142,45 @@ public class LoanService {
                 case "observaciones" -> loan.setLoanDescriptionType((String) value);
                 case "fecha_devolucion" -> loan.setDevolutionDate(parseDate(value));
                 case "equipmentStatus" -> loan.setEquipmentStatus((String) value);
-                case "estado" -> {} // Ya manejado
+                case "estado", "articulo_estado" -> {} // Ya manejados
                 default -> throw new IllegalArgumentException("Campo no válido: " + key);
             }
         });
 
-        // Actualizar estado de artículos si se modificó equipmentStatus
+        // ✅ Caso 1: Actualizar todos los artículos del préstamo
         if (updates.containsKey("equipmentStatus")) {
             String newArticleStatus = determineArticleStatus(loan.getEquipmentStatus());
             updateArticlesStatus(loan.getArticleIds(), newArticleStatus);
         }
 
+        // ✅ Caso 2: Actualizar artículos específicos con verificación de pertenencia
+        if (updates.containsKey("articulo_estado")) {
+            Map<String, String> estadosArticulos = (Map<String, String>) updates.get("articulo_estado");
+            estadosArticulos.forEach((articleIdStr, newStatus) -> {
+                try {
+                    Integer articleId = Integer.parseInt(articleIdStr);
+                    if (!loan.getArticleIds().contains(articleId)) {
+                        throw new IllegalArgumentException("El artículo " + articleId + " no pertenece al préstamo " + id);
+                    }
+                    updateSingleArticleStatus(articleId, newStatus);
+                } catch (NumberFormatException e) {
+                    throw new IllegalArgumentException("ID de artículo inválido: " + articleIdStr, e);
+                }
+            });
+        }
+
         loanValidations(loan);
         loanRepository.save(loan);
     }
+
+    private void updateSingleArticleStatus(Integer articleId, String newStatus) {
+        Article article = articleRepository.findById(articleId)
+                .orElseThrow(() -> new IllegalArgumentException("Artículo no encontrado: " + articleId));
+        article.setArticleStatus(newStatus);
+        articleRepository.save(article);
+    }
+
+
 
     private void handleStatusChange(Loan loan, String newStatus) {
         if (DEVUELTO.equals(newStatus)) {
