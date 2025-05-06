@@ -12,12 +12,17 @@ import java.util.List;
 
 public interface LoanRepository extends MongoRepository<Loan, String> {
     List<Loan> findByLoanStatus(String loanStatus);
+
     List<Loan> findByUserId(String userId);
 
     @Query("{ 'loanStatus' : ?0, $or: [ { $and: [ { 'loanDate' : { $lte: ?2 } }, { 'devolutionDate' : { $gte: ?1 } } ] }, { $and: [ { 'loanDate' : { $lte: ?2 } }, { 'devolutionDate' : null } ] } ] }")
     List<Loan> findOverlappingLoans(String loanStatus, LocalDate startDate, LocalDate endDate);
 
     List<Loan> findByLoanDateBetween(LocalDate startDate, LocalDate endDate);
+
     List<Loan> findByLoanDateBetweenAndLoanStatus(LocalDate startDate, LocalDate endDate, String loanStatus);
 
+    List<Loan> findByLoanStatusAndDevolutionDate(String loanStatus, LocalDate devolutionDate);
+
+    List<Loan> findByLoanStatusAndDevolutionDateBefore(String loanStatus, LocalDate date);
 }

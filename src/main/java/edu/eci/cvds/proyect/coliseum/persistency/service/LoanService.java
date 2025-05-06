@@ -2,11 +2,14 @@
 package edu.eci.cvds.proyect.coliseum.persistency.service;
 
 import edu.eci.cvds.proyect.coliseum.persistency.Exception.LoanException;
+import edu.eci.cvds.proyect.coliseum.persistency.entity.Alert;
 import edu.eci.cvds.proyect.coliseum.persistency.entity.Article;
 import edu.eci.cvds.proyect.coliseum.persistency.entity.Loan;
+import edu.eci.cvds.proyect.coliseum.persistency.repository.AlertRepository;
 import edu.eci.cvds.proyect.coliseum.persistency.repository.ArticleRepository;
 import edu.eci.cvds.proyect.coliseum.persistency.repository.LoanRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,11 +26,13 @@ public class LoanService {
 
     private final LoanRepository loanRepository;
     private final ArticleRepository articleRepository;
+    private final AlertRepository alertRepository;
 
     @Autowired
-    public LoanService(LoanRepository loanRepository, ArticleRepository articleRepository) {
+    public LoanService(LoanRepository loanRepository, ArticleRepository articleRepository,AlertRepository alertRepository) {
         this.loanRepository = loanRepository;
         this.articleRepository = articleRepository;
+        this.alertRepository=alertRepository;
     }
 
     @Transactional
@@ -136,10 +141,17 @@ public class LoanService {
             switch (key) {
                 case "observaciones" -> loan.setLoanDescriptionType((String) value);
                 case "fecha_devolucion" -> loan.setDevolutionDate(parseDate(value));
+                case "equipmentStatus" -> loan.setEquipmentStatus((String) value);
                 case "estado" -> {} // Ya manejado
                 default -> throw new IllegalArgumentException("Campo no válido: " + key);
             }
         });
+
+        // Actualizar estado de artículos si se modificó equipmentStatus
+        if (updates.containsKey("equipmentStatus")) {
+            String newArticleStatus = determineArticleStatus(loan.getEquipmentStatus());
+            updateArticlesStatus(loan.getArticleIds(), newArticleStatus);
+        }
 
         loanValidations(loan);
         loanRepository.save(loan);
@@ -153,12 +165,65 @@ public class LoanService {
         }
     }
 
+    // Método nuevo: Recordatorios 24h antes de la fecha límite
+    @Scheduled(cron = "0 0 9 * * *") // Ejecuta diario a las 9:00 AM
+    public void enviarRecordatoriosDevolucion() {
+        LocalDate fechaRecordatorio = LocalDate.now().plusDays(1);
+
+        List<Loan> prestamos = loanRepository.findByLoanStatusAndDevolutionDate(
+                PRESTADO,
+                fechaRecordatorio
+        );
+
+        prestamos.forEach(prestamo -> {
+            Alert alerta = new Alert(
+                    null,
+                    prestamo.getUserId(),
+                    "Recordatorio: Devolución pendiente para mañana (" + fechaRecordatorio + ")",
+                    LocalDateTime.now()
+            );
+            alertRepository.save(alerta);
+        });
+    }
+
+    // Método nuevo: Verificación diaria de préstamos vencidos
+    @Scheduled(cron = "0 0 9 * * *") // Ejecuta diario a las 9:00 AM
+    public void verificarPrestamosVencidos() {
+        List<Loan> prestamosVencidos = loanRepository.findByLoanStatusAndDevolutionDateBefore(
+                PRESTADO,
+                LocalDate.now()
+        );
+
+        prestamosVencidos.forEach(prestamo -> {
+            this.markAsVencido(prestamo);
+
+            Alert alerta = new Alert(
+                    null,
+                    prestamo.getUserId(),
+                    "Alerta: Préstamo vencido desde " + prestamo.getDevolutionDate(),
+                    LocalDateTime.now()
+            );
+            alertRepository.save(alerta);
+        });
+    }
+
+    // Modificar método existente para incluir alerta
     @Transactional
     public void markAsVencido(Loan loan) {
         loan.setLoanStatus(VENCIDO);
         updateArticlesStatus(loan.getArticleIds(), "Disponible");
         loanRepository.save(loan);
+
+        // Nueva alerta por estado vencido
+        Alert alerta = new Alert(
+                null,
+                loan.getUserId(),
+                "Préstamo marcado como vencido: " + loan.getId(),
+                LocalDateTime.now()
+        );
+        alertRepository.save(alerta);
     }
+
 
     private LocalDate parseDate(Object dateValue) {
         if (dateValue instanceof String) {
@@ -230,5 +295,9 @@ public class LoanService {
 
     public List<Loan> getLoansByUserReport(String userId) {
         return loanRepository.findByUserId(userId);
+
     }
+
+
+
 }
