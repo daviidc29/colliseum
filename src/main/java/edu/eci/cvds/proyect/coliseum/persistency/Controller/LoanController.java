@@ -1,4 +1,4 @@
-package edu.eci.cvds.proyect.coliseum.persistency.Controller;
+package edu.eci.cvds.proyect.coliseum.persistency.controller;
 
 import edu.eci.cvds.proyect.coliseum.persistency.Exception.ArticleException;
 import edu.eci.cvds.proyect.coliseum.persistency.Exception.LoanException;
