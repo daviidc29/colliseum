@@ -1,6 +1,7 @@
-/*package edu.eci.cvds.proyect.coliseum.persistency.entity;
+package edu.eci.cvds.proyect.coliseum.persistency.entity;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.*;
@@ -10,18 +11,23 @@ import org.springframework.data.mongodb.core.mapping.Document;
 import javax.persistence.Id;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data               // Genera getters, setters, toString, equals y hashCode
 @NoArgsConstructor  // Constructor sin argumentos
 @AllArgsConstructor // Constructor con todos los campos
 @Builder
-@Document(collection="loan")// Builder pattern
+@Document(collection="loans")// Builder pattern
 
 public class Loan {
     @Id
     private String id;
 
+    @NotEmpty(message = "Debe incluir al menos un artículo")
+    private List<Integer> articleIds;
+
     @NotBlank(message="El nombre de usuario no puede estar vació")
+    @NonNull
     private String nameUser;
 
     @NotBlank(message="El id del usuario no puede estar vació")
@@ -62,4 +68,3 @@ public class Loan {
     }
 }
 
-*/

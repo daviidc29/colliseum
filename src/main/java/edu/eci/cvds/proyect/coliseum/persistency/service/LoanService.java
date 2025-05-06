@@ -1,171 +1,234 @@
-/*package edu.eci.cvds.proyect.coliseum.persistency.service;
+// LoanService.java
+package edu.eci.cvds.proyect.coliseum.persistency.service;
 
 import edu.eci.cvds.proyect.coliseum.persistency.Exception.LoanException;
-import edu.eci.cvds.proyect.coliseum.persistency.dto.DevolutionDto;
+import edu.eci.cvds.proyect.coliseum.persistency.entity.Article;
 import edu.eci.cvds.proyect.coliseum.persistency.entity.Loan;
+import edu.eci.cvds.proyect.coliseum.persistency.repository.ArticleRepository;
 import edu.eci.cvds.proyect.coliseum.persistency.repository.LoanRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class LoanService {
-    public static final String VENCIDO="Vencido";
-    public static final String DEVUELTO="Devuelto";
+    public static final String PRESTADO = "Prestado";
+    public static final String VENCIDO = "Vencido";
+    public static final String DEVUELTO = "Devuelto";
+
     private final LoanRepository loanRepository;
+    private final ArticleRepository articleRepository;
 
     @Autowired
-    public LoanService(LoanRepository loanRepository) {
-        this.loanRepository=loanRepository;
-
+    public LoanService(LoanRepository loanRepository, ArticleRepository articleRepository) {
+        this.loanRepository = loanRepository;
+        this.articleRepository = articleRepository;
     }
 
-    public Loan createLoan(Loan loan){
-        loan.setLoanDate(LocalDate.now());
-        loan.setCreationDate(LocalDateTime.now());
+    @Transactional
+    public Loan createLoan(Loan loan) {
+        validateArticlesForLoan(loan.getArticleIds());
+        configureLoanDates(loan);
         loanValidations(loan);
+        updateArticlesStatus(loan.getArticleIds(), PRESTADO);
         return loanRepository.save(loan);
     }
 
-    private void loanValidations(Loan loan) {
-
-        if (loan.getDevolutionDate() != null && loan.getLoanDate().isAfter(loan.getDevolutionDate())) {
-            throw new LoanException.LoanExceptionTimeError("La fecha de préstamo no puede ser después de la fecha de devolución");
-        }
-        if (!loan.getLoanStatus().matches("Prestado|Vencido|Devuelto")) {
-            throw new LoanException.LoanExceptionStateError("El estado solo puede ser Prestado, Vencido o Devuelto");
+    private void validateArticlesForLoan(List<Integer> articleIds) {
+        if (articleIds == null || articleIds.isEmpty()) {
+            throw new LoanException("El préstamo debe contener al menos un artículo");
         }
 
+        List<Article> articles = articleRepository.findAllById(articleIds);
+        if (articles.size() != articleIds.size()) {
+            throw new LoanException("Algunos artículos no existen");
+        }
+
+        List<Integer> noDisponibles = articles.stream()
+                .filter(article -> !"Disponible".equals(article.getArticleStatus()))
+                .map(Article::getId)
+                .toList();
+
+        if (!noDisponibles.isEmpty()) {
+            throw new LoanException("Los siguientes artículos no están disponibles: " + noDisponibles);
+        }
     }
-    public List<Loan> getLoans(String estado) {
-        if (estado == null) {
-            return getLoans();
-        } else {
-            switch (estado) {
-                case "Prestado":
-                    return getLoansPrestado();
-                case "Vencido":
-                    return getLoansVencido();
-                case "Devuelto":
-                    return getLoansDevuelto();
-                default:
-                    throw new LoanException.LoanExceptionStateError("El estado solo puede ser Prestado, Vencido o Devuelto");
+
+
+    private void configureLoanDates(Loan loan) {
+        if (loan.getLoanDate() == null) {
+            loan.setLoanDate(LocalDate.now());
+        }
+        loan.setCreationDate(LocalDateTime.now());
+    }
+
+    private void loanValidations(Loan loan) {
+        if (loan.getDevolutionDate() != null) {
+            if (loan.getLoanDate().isAfter(loan.getDevolutionDate())) {
+                throw new LoanException("La fecha de préstamo no puede ser posterior a la de devolución");
+            }
+            if (loan.getDevolutionDate().isBefore(LocalDate.now())) {
+                throw new LoanException("La fecha de devolución no puede ser en el pasado");
             }
         }
+
+        if (!loan.getLoanStatus().matches(PRESTADO + "|" + VENCIDO + "|" + DEVUELTO)) {
+            throw new LoanException("Estado de préstamo inválido");
+        }
     }
 
+    @Transactional
+    public void devolverLoan(String loanId) {
+        Loan loan = getLoanById(loanId);
+        loan.setLoanStatus(DEVUELTO);
+        loan.setDevolutionDate(LocalDate.now());
 
-    private List<Loan> getLoans() {
-        return loanRepository.findAll();
+        String newArticleStatus = determineArticleStatus(loan.getEquipmentStatus());
+        updateArticlesStatus(loan.getArticleIds(), newArticleStatus);
+
+        loanRepository.save(loan);
     }
 
-
-    private List<Loan> getLoansPrestado() {
-        return loanRepository.findByEstado("Prestado");
+    private String determineArticleStatus(String equipmentStatus) {
+        return switch (equipmentStatus) {
+            case "Dañado" -> "Dañado";
+            case "Requiere mantenimiento" -> "RequiereMantenimiento";
+            default -> "Disponible";
+        };
     }
 
+    @Transactional
+    public Loan deleteLoanById(String id) {
+        Loan loan = getLoanById(id);
+        validateDeletion(loan);
 
-    private List<Loan> getLoansVencido() {
-        return loanRepository.findByEstado(VENCIDO);
+        if (PRESTADO.equals(loan.getLoanStatus())) {
+            updateArticlesStatus(loan.getArticleIds(), "Disponible");
+        }
+
+        loanRepository.delete(loan);
+        return loan;
     }
 
-
-    private List<Loan> getLoansDevuelto() {
-        return loanRepository.findByEstado(DEVUELTO);
+    private void validateDeletion(Loan loan) {
+        if (DEVUELTO.equals(loan.getLoanStatus())) {
+            throw new LoanException("No se puede eliminar un préstamo devuelto");
+        }
+        if (VENCIDO.equals(loan.getLoanStatus())) {
+            throw new LoanException("No se puede eliminar un préstamo vencido");
+        }
     }
 
+    @Transactional
+    public void updateLoan(String id, Map<String, Object> updates) {
+        Loan loan = getLoanById(id);
 
+        if (updates.containsKey("estado")) {
+            handleStatusChange(loan, (String) updates.get("estado"));
+        }
+
+        updates.forEach((key, value) -> {
+            switch (key) {
+                case "observaciones" -> loan.setLoanDescriptionType((String) value);
+                case "fecha_devolucion" -> loan.setDevolutionDate(parseDate(value));
+                case "estado" -> {} // Ya manejado
+                default -> throw new IllegalArgumentException("Campo no válido: " + key);
+            }
+        });
+
+        loanValidations(loan);
+        loanRepository.save(loan);
+    }
+
+    private void handleStatusChange(Loan loan, String newStatus) {
+        if (DEVUELTO.equals(newStatus)) {
+            devolverLoan(loan.getId());
+        } else if (VENCIDO.equals(newStatus)) {
+            markAsVencido(loan);
+        }
+    }
+
+    @Transactional
+    public void markAsVencido(Loan loan) {
+        loan.setLoanStatus(VENCIDO);
+        updateArticlesStatus(loan.getArticleIds(), "Disponible");
+        loanRepository.save(loan);
+    }
+
+    private LocalDate parseDate(Object dateValue) {
+        if (dateValue instanceof String) {
+            return LocalDate.parse((String) dateValue);
+        } else if (dateValue instanceof LocalDate) {
+            return (LocalDate) dateValue;
+        }
+        throw new IllegalArgumentException("Formato de fecha inválido");
+    }
+
+    private void updateArticlesStatus(List<Integer> articleIds, String newStatus) {
+        List<Article> articles = articleRepository.findAllById(articleIds);
+        articles.forEach(article -> article.setArticleStatus(newStatus));
+        articleRepository.saveAll(articles);
+    }
+
+    // Métodos de consulta
+    public List<Loan> getLoans(String status) {
+        return switch (status != null ? status : "") {
+            case "Prestado" -> loanRepository.findByLoanStatus(PRESTADO);
+            case "Vencido" -> loanRepository.findByLoanStatus(VENCIDO);
+            case "Devuelto" -> loanRepository.findByLoanStatus(DEVUELTO);
+            default -> loanRepository.findAll();
+        };
+    }
 
     public Loan getLoanById(String id) {
-        return loanRepository.findById(id).orElseThrow(() ->
-                new LoanException.LoanExceptionPrestamoIdNotFound("El préstamo con el id " + id + " no existe"));
+        return loanRepository.findById(id)
+                .orElseThrow(() -> new LoanException("Préstamo no encontrado"));
     }
 
-
-
-
-    public List<Loan> getLoansByIdEstudiante(String id) {
-        List<Loan> loans =  loanRepository.findByUserId(id);
+    public List<Loan> getLoansByUser(String userId) {
+        List<Loan> loans = loanRepository.findByUserId(userId);
         if (loans.isEmpty()) {
-            throw new LoanException.LoanExceptionEstudianteHasNotPrestamo("El estudiante con el id " + id + " no tiene préstamos o no existe.");
+            throw new LoanException("El usuario no tiene préstamos registrados");
         }
         return loans;
     }
 
-
-    public Loan deletePrestamoById(String id) {
-        Loan loan = getLoanById(id);
-        if (loan.getLoanStatus().equals(DEVUELTO)) {
-            throw new LoanException.LoanExceptionStateError("El préstamo ya ha sido devuelto");
-        } else if (loan.getLoanStatus().equals(VENCIDO)) {
-            throw new LoanException.LoanExceptionStateError("El préstamo está vencido");
-        } else {
-            loanRepository.deleteById(loan.getId());
-            return loan;
+    public Object getAvailableArticlesInInterval(LocalDate startDate, LocalDate endDate) {
+        if (startDate == null || endDate == null) {
+            throw new IllegalArgumentException("Las fechas de inicio y fin son requeridas.");
         }
-    }
-
-
-    public void updateLoan(String id, Map<String, Object> updates) {
-        Loan loan= getLoanById(id);
-        if ((VENCIDO.equals(loan.getLoanStatus()) || DEVUELTO.equals(loan.getLoanStatus())) && !updates.containsKey("historial_estado")) {
-            throw new IllegalArgumentException("No se puede actualizar el préstamo en estado vencido o devuelto, excepto el historial del ejemplar");
+        if (startDate.isAfter(endDate)) {
+            throw new IllegalArgumentException("La fecha de inicio no puede ser posterior a la fecha de fin.");
         }
-        updates.forEach((key, value) -> {
-            switch (key) {
-                case "observaciones":
-                    loan.setLoanDescriptionType((String) value);
-                    break;
-                case "estado":
-                    loan.setLoanStatus((String) value);
-                    break;
-                case "fecha_devolucion":
-                    if (value instanceof String) {
-                        DateTimeFormatter formatter = DateTimeFormatter.ISO_DATE_TIME;
-                        LocalDateTime fechaDevolucion = LocalDateTime.parse((String) value, formatter);
-                        loan.setDevolutionDate(LocalDate.from(fechaDevolucion));
-                    } else if (value instanceof LocalDateTime) {
-                        loan.setDevolutionDate(LocalDate.from((LocalDateTime) value));
-                    } else {
-                        throw new IllegalArgumentException("Formato de fecha_devolucion no válido");
-                    }
-                    break;
-                default:
-                    throw new IllegalArgumentException("Atributo no válido: " + key);
-            }
-        });
-        loanRepository.save(loan);
+
+        List<Loan> overlappingLoans = loanRepository.findOverlappingLoans(PRESTADO, startDate, endDate);
+        Set<Integer> unavailableArticleIds = overlappingLoans.stream()
+                .flatMap(loan -> loan.getArticleIds().stream())
+                .collect(Collectors.toSet());
+
+        return unavailableArticleIds.isEmpty()
+                ? articleRepository.findByArticleStatus("Disponible")
+                : articleRepository.findByArticleStatusAndIdNotIn("Disponible", unavailableArticleIds);
     }
 
-    public Loan devolverLoan(String loanId, String loanStatus) {
-        Loan loan = getLoanById(loanId);
-        loan.setLoanStatus("Devuelto");
-        loan.setDevolutionDate(LocalDate.now());
-        loanRepository.save(loan);
-
-
-        DevolutionDto devolutionDto = DevolutionDto.builder()
-                .userId(loan.getUserId())
-                .emailGuardian("")
-                .build();
-        return loan;
+    public List<Loan> getLoansByDateRangeAndStatus(LocalDate startDate, LocalDate endDate, String status) {
+        if (startDate == null || endDate == null) {
+            throw new LoanException("Las fechas de inicio y fin son requeridas.");
+        }
+        if (startDate.isAfter(endDate)) {
+            throw new LoanException("La fecha de inicio no puede ser posterior a la fecha de fin.");
+        }
+        return (status == null || status.isEmpty())
+                ? loanRepository.findByLoanDateBetween(startDate, endDate)
+                : loanRepository.findByLoanDateBetweenAndLoanStatus(startDate, endDate, status);
     }
 
-    public void changeStatusOfLoanExpire(Loan loan){
-        loan.setLoanStatus("Vencido");
-        loanRepository.save(loan);
+    public List<Loan> getLoansByUserReport(String userId) {
+        return loanRepository.findByUserId(userId);
     }
-
-
-
-
-
-
-
 }
-*/

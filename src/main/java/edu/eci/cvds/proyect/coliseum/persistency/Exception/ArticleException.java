@@ -11,4 +11,7 @@ public class ArticleException  extends RuntimeException{
             super(message);
         }
     }
+    public ArticleException(Integer articleId) {
+        super("El artículo con ID " + articleId + " no está disponible.");
+    }
 }

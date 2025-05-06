@@ -1,4 +1,4 @@
-/*package edu.eci.cvds.proyect.coliseum.persistency.Exception;
+package edu.eci.cvds.proyect.coliseum.persistency.Exception;
 
 
 public class LoanException extends RuntimeException{
@@ -53,4 +53,3 @@ public class LoanException extends RuntimeException{
         }
     }
 }
-*/
