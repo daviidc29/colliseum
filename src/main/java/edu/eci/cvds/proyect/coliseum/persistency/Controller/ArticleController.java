@@ -1,4 +1,4 @@
-package edu.eci.cvds.proyect.coliseum.persistency.controller;
+package edu.eci.cvds.proyect.coliseum.persistency.Controller;
 
 import java.util.HashMap;
 import java.util.List;
@@ -20,12 +20,21 @@ import edu.eci.cvds.proyect.coliseum.persistency.dto.ArticleDto;
 import edu.eci.cvds.proyect.coliseum.persistency.entity.Article;
 import edu.eci.cvds.proyect.coliseum.persistency.repository.AlertRepository;
 import edu.eci.cvds.proyect.coliseum.persistency.service.ArticleService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.extern.slf4j.Slf4j;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.util.Collections;
 
 @RestController
 @RequestMapping("/Article")
+@Slf4j
+@Tag(name = "Article resource")
 public class ArticleController {
      
     private ArticleService articleService;
@@ -41,6 +50,11 @@ public class ArticleController {
     }
 
     @GetMapping
+    @Operation(summary = "Obtener todos los artículos", description = "Recupera una lista de todos los artículos disponibles.")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Lista de artículos obtenida exitosamente"),
+        @ApiResponse(responseCode = "500", description = "Error interno del servidor")
+    })
     public ResponseEntity<List<Article>> getAll() {
         try {
             return new ResponseEntity<>(articleService.getAll(), HttpStatus.OK);
@@ -52,7 +66,15 @@ public class ArticleController {
         
     }
     @GetMapping("/por-id/{id}")
-    public ResponseEntity<Object> getOne(@PathVariable("id") Integer id) {
+    @Operation(summary = "Obtener artículo por ID", description = "Recupera un artículo específico utilizando su ID.")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Artículo encontrado"),
+        @ApiResponse(responseCode = "404", description = "Artículo no encontrado"),
+        @ApiResponse(responseCode = "500", description = "Error interno del servidor")
+    })
+    public ResponseEntity<Object> getOne(
+        @Parameter(description = "ID del artículo a recuperar", required = true) @PathVariable("id") Integer id) {
+        
         try {
             return new ResponseEntity<>(articleService.getOne(id), HttpStatus.OK);
         } catch (Exception e) {
@@ -66,7 +88,13 @@ public class ArticleController {
     }
 
     @GetMapping("/por-nombre/{name}")
-    public ResponseEntity<?> getArticlesNames(@PathVariable("name") String name) {
+    @Operation(summary = "Buscar artículos por nombre", description = "Recupera artículos que coinciden con el nombre proporcionado.")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Artículos encontrados"),
+        @ApiResponse(responseCode = "500", description = "Error interno del servidor")
+    })
+    public ResponseEntity<?> getArticlesNames(
+        @Parameter(description = "Nombre del artículo a buscar", required = true) @PathVariable("name") String name) {
         try {
             List<Article> articles = articleService.getArticlesNames(name);
             return new ResponseEntity<>(articles, HttpStatus.OK);
@@ -81,7 +109,13 @@ public class ArticleController {
     }
 
     @GetMapping("/por-estado/{articleStatus}")
-    public ResponseEntity<?> getArticlesStatus(@PathVariable("articleStatus") String articleStatus) {
+    @Operation(summary = "Buscar artículos por estado", description = "Recupera artículos que coinciden con el estado proporcionado.")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Artículos encontrados"),
+        @ApiResponse(responseCode = "500", description = "Error interno del servidor")
+    })
+    public ResponseEntity<?> getArticlesStatus(
+        @Parameter(description = "Estado del artículo a buscar", required = true) @PathVariable("articleStatus") String articleStatus) {
         try {
             List<Article> articles = articleService.getArticlesStatus(articleStatus);
             return new ResponseEntity<>(articles, HttpStatus.OK);
@@ -97,7 +131,14 @@ public class ArticleController {
 
 
     @PostMapping 
-    public ResponseEntity<Object> save(@RequestBody ArticleDto articleDto) {
+    @Operation(summary = "Crear un nuevo artículo", description = "Agrega un nuevo artículo al sistema.")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "201", description = "Artículo creado exitosamente"),
+        @ApiResponse(responseCode = "400", description = "Solicitud inválida"),
+        @ApiResponse(responseCode = "500", description = "Error interno del servidor")
+    })
+    public ResponseEntity<Object> save(
+        @Parameter(description = "Detalles del artículo a crear", required = true) @RequestBody ArticleDto articleDto) {
         try {
             Article savedArticle = articleService.save(articleDto);
             return new ResponseEntity<>(savedArticle, HttpStatus.CREATED);
@@ -111,7 +152,15 @@ public class ArticleController {
     }
 
     @PutMapping("/actualizar/{id}")
-    public ResponseEntity<Object> update(@PathVariable("id") Integer id, @RequestBody ArticleDto articleDto) {
+    @Operation(summary = "Actualizar un artículo existente", description = "Actualiza los detalles de un artículo existente utilizando su ID.")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Artículo actualizado exitosamente"),
+        @ApiResponse(responseCode = "404", description = "Artículo no encontrado"),
+        @ApiResponse(responseCode = "500", description = "Error interno del servidor")
+    })
+    public ResponseEntity<Object> update(
+        @Parameter(description = "ID del artículo a actualizar", required = true) @PathVariable("id") Integer id,
+        @Parameter(description = "Nuevos detalles del artículo", required = true) @RequestBody ArticleDto articleDto) {
         try {
             return new ResponseEntity<>(articleService.update(id, articleDto), HttpStatus.OK);
         } catch (Exception e) {
@@ -126,7 +175,14 @@ public class ArticleController {
     }
 
     @DeleteMapping("/eliminar/{id}")
-    public ResponseEntity<Object> delete(@PathVariable("id") Integer id) {
+    @Operation(summary = "Eliminar un artículo", description = "Elimina un artículo existente utilizando su ID.")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Artículo eliminado exitosamente"),
+        @ApiResponse(responseCode = "404", description = "Artículo no encontrado"),
+        @ApiResponse(responseCode = "500", description = "Error interno del servidor")
+    })
+    public ResponseEntity<Object> delete(
+        @Parameter(description = "ID del artículo a eliminar", required = true) @PathVariable("id") Integer id) {
         try {
             articleService.delete(id);
             return new ResponseEntity<>(Collections.singletonMap("message", "Articulo eliminado correctamente"), HttpStatus.OK);
@@ -141,7 +197,13 @@ public class ArticleController {
                     
     }
     @GetMapping("/disponibles/{name}")
-    public ResponseEntity<?> getAvailableCount(@PathVariable("name") String name) {
+    @Operation(summary = "Contar artículos disponibles por nombre", description = "Devuelve la cantidad de artículos disponibles que coinciden con el nombre proporcionado.")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Conteo obtenido exitosamente"),
+        @ApiResponse(responseCode = "500", description = "Error interno del servidor")
+    })
+    public ResponseEntity<?> getAvailableCount(
+        @Parameter(description = "Nombre del artículo para contar disponibilidad", required = true) @PathVariable("name") String name) {
         try {
             long count = articleService.getAvailableCountByName(name);
             return ResponseEntity.ok(Collections.singletonMap("disponibles", count));
@@ -151,6 +213,11 @@ public class ArticleController {
         }
     }
     @GetMapping("/alerts")
+    @Operation(summary = "Obtener todas las alertas", description = "Recupera todas las alertas relacionadas con los artículos.")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Alertas obtenidas exitosamente"),
+        @ApiResponse(responseCode = "500", description = "Error interno del servidor")
+    })
     public ResponseEntity<?> getAllAlerts() {
         try {
             return new ResponseEntity<>(alertRepository.findAll(), HttpStatus.OK);

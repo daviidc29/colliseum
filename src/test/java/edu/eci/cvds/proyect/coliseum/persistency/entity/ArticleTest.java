@@ -86,5 +86,5 @@ class ArticleTest {
         assertEquals("RequireMantenimiento", article.getArticleStatus());
         assertEquals("Raquetas profesional", article.getDescription());
         assertEquals("micro.jpg", article.getImageUrl());
-    }
+    } 
 }

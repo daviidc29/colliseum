@@ -71,5 +71,5 @@ class ArticleDtoTest {
         assertEquals("available", articleDto.getArticleStatus());
         assertEquals("Wireless mouse", articleDto.getDescription());
         assertEquals("mouse.jpg", articleDto.getImageUrl());
-    }
+    } 
 }

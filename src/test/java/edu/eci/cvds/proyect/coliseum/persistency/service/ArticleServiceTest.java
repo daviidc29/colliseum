@@ -231,5 +231,5 @@ void getAvailableCountByNameThrowsIfNameNotFound() {
 
     assertEquals("Nombre del artículo no encontrado: Lazo", exception.getMessage());
 }
-
+ 
 }

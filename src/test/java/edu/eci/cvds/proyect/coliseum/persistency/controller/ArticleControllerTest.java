@@ -10,6 +10,8 @@ import org.junit.jupiter.api.Test;
 import java.util.Collections;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
+
+import edu.eci.cvds.proyect.coliseum.persistency.Controller.ArticleController;
 import edu.eci.cvds.proyect.coliseum.persistency.dto.ArticleDto;
 import edu.eci.cvds.proyect.coliseum.persistency.entity.Article;
 import edu.eci.cvds.proyect.coliseum.persistency.repository.AlertRepository;
@@ -156,6 +158,6 @@ class ArticleControllerTest {
                         .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.Error").value("Error al actualizar el articulo"));
-    }
+    } 
 }
 
