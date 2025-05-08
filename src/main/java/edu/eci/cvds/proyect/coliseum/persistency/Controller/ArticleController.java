@@ -3,6 +3,7 @@ package edu.eci.cvds.proyect.coliseum.persistency.Controller;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import edu.eci.cvds.proyect.coliseum.persistency.dto.ArticleDto;
@@ -34,7 +36,7 @@ import java.util.Collections;
 @RestController
 @RequestMapping("/Article")
 @Slf4j
-@Tag(name = "Article resource")
+@Tag(name = "Articles")
 public class ArticleController {
      
     private ArticleService articleService;
@@ -50,84 +52,54 @@ public class ArticleController {
     }
 
     @GetMapping
-    @Operation(summary = "Obtener todos los artículos", description = "Recupera una lista de todos los artículos disponibles.")
+    @Operation(summary = "Buscar u obtener todos los artículos", description = """
+        Si no se proporciona parámetro, devuelve todos los artículos.
+        Si es un número, busca por ID.
+        Si es un estado válido (Disponible, Dañado, RequireMantenimiento, Prestado, Devuelto, Perdido), busca por estado.
+        Si comienza con 'disponibles:', filtra por nombre y estado Disponible.
+        De lo contrario, busca por nombre.
+        Incluye el total de artículos encontrados.
+        """)
     @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Lista de artículos obtenida exitosamente"),
-        @ApiResponse(responseCode = "500", description = "Error interno del servidor")
-    })
-    public ResponseEntity<List<Article>> getAll() {
-        try {
-            return new ResponseEntity<>(articleService.getAll(), HttpStatus.OK);
-        } catch (Exception e) {
-            String errorMessage = (e.getCause() != null) ? e.getCause().toString() : e.getMessage();
-            logger.error("Error al obtener los articulos: {}", errorMessage, e);
-            return new ResponseEntity<>(Collections.emptyList(), HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-        
-    }
-    @GetMapping("/por-id/{id}")
-    @Operation(summary = "Obtener artículo por ID", description = "Recupera un artículo específico utilizando su ID.")
-    @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Artículo encontrado"),
+        @ApiResponse(responseCode = "200", description = "Artículos obtenidos correctamente"),
         @ApiResponse(responseCode = "404", description = "Artículo no encontrado"),
         @ApiResponse(responseCode = "500", description = "Error interno del servidor")
     })
-    public ResponseEntity<Object> getOne(
-        @Parameter(description = "ID del artículo a recuperar", required = true) @PathVariable("id") Integer id) {
-        
+    public ResponseEntity<?> getArticles(@RequestParam(value = "q", required = false) String q) {
         try {
-            return new ResponseEntity<>(articleService.getOne(id), HttpStatus.OK);
-        } catch (Exception e) {
-            String errorMessage = "Error al obtener el articulo con ID " + id;
-            logger.error("{}: {}", errorMessage, e.getMessage(), e);
-            Map<String, String> errorResponse = new HashMap<>();
-            errorResponse.put(ERROR_KEY, errorMessage);
-            errorResponse.put("details", e.getMessage());
-            return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
-        }       
-    }
+            List<Article> result;
 
-    @GetMapping("/por-nombre/{name}")
-    @Operation(summary = "Buscar artículos por nombre", description = "Recupera artículos que coinciden con el nombre proporcionado.")
-    @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Artículos encontrados"),
-        @ApiResponse(responseCode = "500", description = "Error interno del servidor")
-    })
-    public ResponseEntity<?> getArticlesNames(
-        @Parameter(description = "Nombre del artículo a buscar", required = true) @PathVariable("name") String name) {
-        try {
-            List<Article> articles = articleService.getArticlesNames(name);
-            return new ResponseEntity<>(articles, HttpStatus.OK);
+            if (q == null || q.isBlank()) {
+                result = articleService.getAll();
+            } else if (q.matches("\\d+")) {
+                Article article = articleService.getOne(Integer.parseInt(q));
+                result = (article != null) ? List.of(article) : List.of();
+            } else if (q.startsWith("disponibles:")) {
+                String nombre = q.substring("disponibles:".length());
+                result = articleService.getArticlesNames(nombre).stream()
+                        .filter(a -> "Disponible".equalsIgnoreCase(a.getArticleStatus()))
+                        .toList();
+            } else {
+                Set<String> estadosValidos = Set.of("Disponible", "Dañado", "RequireMantenimiento", "Prestado", "Devuelto", "Perdido");
+                result = estadosValidos.contains(q)
+                        ? articleService.getArticlesStatus(q)
+                        : articleService.getArticlesNames(q);
+            }
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("cantidad", result.size());
+            response.put("articulos", result);
+            return new ResponseEntity<>(response, HttpStatus.OK);
+
         } catch (Exception e) {
-            String errorMessage = "Error al obtener el artículo con nombre " + name;
-            logger.error("{}: {}", errorMessage, e.getMessage(), e);
+            logger.error("Error al obtener artículos: {}", e.getMessage(), e);
             Map<String, String> errorResponse = new HashMap<>();
-            errorResponse.put(ERROR_KEY, errorMessage);
+            errorResponse.put("error", "Error al obtener artículos");
             errorResponse.put("details", e.getMessage());
             return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
-    @GetMapping("/por-estado/{articleStatus}")
-    @Operation(summary = "Buscar artículos por estado", description = "Recupera artículos que coinciden con el estado proporcionado.")
-    @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Artículos encontrados"),
-        @ApiResponse(responseCode = "500", description = "Error interno del servidor")
-    })
-    public ResponseEntity<?> getArticlesStatus(
-        @Parameter(description = "Estado del artículo a buscar", required = true) @PathVariable("articleStatus") String articleStatus) {
-        try {
-            List<Article> articles = articleService.getArticlesStatus(articleStatus);
-            return new ResponseEntity<>(articles, HttpStatus.OK);
-        } catch (Exception e) {
-            String errorMessage = "Error al obtener el artículo con estado " + articleStatus;
-            logger.error("{}: {}", errorMessage, e.getMessage(), e);
-            Map<String, String> errorResponse = new HashMap<>();
-            errorResponse.put(ERROR_KEY, errorMessage);
-            errorResponse.put("details", e.getMessage());
-            return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-    }
 
 
     @PostMapping 
@@ -151,7 +123,7 @@ public class ArticleController {
         }
     }
 
-    @PutMapping("/actualizar/{id}")
+    @PutMapping("/{id}")
     @Operation(summary = "Actualizar un artículo existente", description = "Actualiza los detalles de un artículo existente utilizando su ID.")
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "Artículo actualizado exitosamente"),
@@ -174,7 +146,7 @@ public class ArticleController {
         
     }
 
-    @DeleteMapping("/eliminar/{id}")
+    @DeleteMapping("/{id}")
     @Operation(summary = "Eliminar un artículo", description = "Elimina un artículo existente utilizando su ID.")
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "Artículo eliminado exitosamente"),
@@ -196,22 +168,7 @@ public class ArticleController {
         }
                     
     }
-    @GetMapping("/disponibles/{name}")
-    @Operation(summary = "Contar artículos disponibles por nombre", description = "Devuelve la cantidad de artículos disponibles que coinciden con el nombre proporcionado.")
-    @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Conteo obtenido exitosamente"),
-        @ApiResponse(responseCode = "500", description = "Error interno del servidor")
-    })
-    public ResponseEntity<?> getAvailableCount(
-        @Parameter(description = "Nombre del artículo para contar disponibilidad", required = true) @PathVariable("name") String name) {
-        try {
-            long count = articleService.getAvailableCountByName(name);
-            return ResponseEntity.ok(Collections.singletonMap("disponibles", count));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(Collections.singletonMap("error", "Error al contar artículos disponibles: " + e.getMessage()));
-        }
-    }
+   
     @GetMapping("/alerts")
     @Operation(summary = "Obtener todas las alertas", description = "Recupera todas las alertas relacionadas con los artículos.")
     @ApiResponses(value = {

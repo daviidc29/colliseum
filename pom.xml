@@ -82,11 +82,7 @@
 			<artifactId>hibernate-core</artifactId>
 			<version>5.4.4.Final</version>
 		</dependency>
-        <dependency>
-            <groupId>junit</groupId>
-            <artifactId>junit</artifactId>
-            <scope>test</scope>
-        </dependency>
+        
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
@@ -101,11 +97,6 @@
 			<groupId>com.auth0</groupId>
 			<artifactId>java-jwt</artifactId>
 			<version>4.2.1</version>
-		</dependency>
-		<dependency>
-			<groupId>org.projectlombok</groupId>
-			<artifactId>lombok</artifactId>
-			<scope>provided</scope>
 		</dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>
