@@ -322,6 +322,38 @@ public class LoanService {
         return loanRepository.findByUserId(userId);
 
     }
+    @Transactional
+    public void updateArticlesStatus(String loanId, Map<String, String> articulosUpdate) {
+        Loan loan = getLoanById(loanId);
+        List<Integer> validArticleIds = loan.getArticleIds();
+
+        articulosUpdate.forEach((articleIdStr, newStatus) -> {
+            try {
+                Integer articleId = Integer.parseInt(articleIdStr);
+
+                if (!validArticleIds.contains(articleId)) {
+                    throw new IllegalArgumentException("Artículo " + articleId + " no pertenece al préstamo");
+                }
+
+                if (!isValidArticleStatus(newStatus)) {
+                    throw new IllegalArgumentException("Estado inválido para artículo: " + newStatus);
+                }
+
+                articleRepository.findById(articleId).ifPresent(article -> {
+                    article.setArticleStatus(newStatus);
+                    articleRepository.save(article);
+                });
+
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("ID de artículo inválido: " + articleIdStr);
+            }
+        });
+    }
+
+    private boolean isValidArticleStatus(String status) {
+        return List.of("Disponible", "Dañado", "RequiereMantenimiento", "Prestado", "Perdido")
+                .contains(status);
+    }
 
 
 

@@ -46,6 +46,11 @@
 	</properties>
 	<dependencies>
 		<dependency>
+			<groupId>com.fasterxml.jackson.datatype</groupId>
+			<artifactId>jackson-datatype-jsr310</artifactId>
+			<version>2.15.0</version> <!-- Usa la versión que coincida con tu proyecto -->
+		</dependency>
+		<dependency>
 			<groupId>org.projectlombok</groupId>
 			<artifactId>lombok</artifactId>
 			<version>1.18.30</version> <!-- Usa la versión más reciente -->
@@ -134,6 +139,7 @@
 					<excludes>
 						<exclude>/configurators/</exclude>
 						<exclude>edu/eci/cvds/proyect/coliseum/persistency/security/**</exclude>
+						<exclude>edu/eci/cvds/proyect/coliseum/persistency/Exception/**</exclude>
 					</excludes>
 					</configuration>
 				</execution>

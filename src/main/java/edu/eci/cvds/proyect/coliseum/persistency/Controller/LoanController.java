@@ -28,29 +28,7 @@ public class LoanController {
     @Autowired
     private LoanService loanService;
 
-    @GetMapping
-    @Operation(summary = "Obtener todos los préstamos", description = "Recupera una lista de todos los préstamos, opcionalmente filtrados por estado.")
-    public ResponseEntity<?> getPrestamos(
-        @Parameter(description = "Estado opcional del préstamo (ej. activo, devuelto)", required = false)
-        @RequestParam(value = "status", required = false) String status) { 
-        try {
-            return ResponseEntity.ok(Collections.singletonMap("loan", loanService.getLoans(status)));
-        } catch (LoanException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Collections.singletonMap("error", e.getMessage()));
-        }
-    }
 
-    @GetMapping("/{id}")
-    @Operation(summary = "Obtener préstamo por ID", description = "Devuelve los detalles de un préstamo específico según su ID.")
-    public ResponseEntity<?> getLoanById(
-        @Parameter(description = "ID del préstamo", required = true)
-        @PathVariable String id) {
-        try {
-            return ResponseEntity.ok(Collections.singletonMap("loan", loanService.getLoanById(id)));
-        } catch (LoanException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Collections.singletonMap("error", e.getMessage()));
-        }
-    }
 
     @PostMapping
     @Operation(summary = "Crear un nuevo préstamo", description = "Crea un préstamo nuevo con los datos proporcionados.")
@@ -69,22 +47,7 @@ public class LoanController {
         }
     }
 
-    @PatchMapping("/{id}/devolver")
-    @Operation(summary = "Devolver préstamo", description = "Marca un préstamo como devuelto.")
-    public ResponseEntity<?> devolverLoan(
-        @Parameter(description = "ID del préstamo a devolver", required = true)
-        @PathVariable String id) {
-        try {
-            loanService.devolverLoan(id);
-            return ResponseEntity.ok(Collections.singletonMap("message", "Préstamo devuelto correctamente"));
-        } catch (LoanException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Collections.singletonMap("error", e.getMessage()));
-        } catch (ArticleException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Collections.singletonMap("error", e.getMessage()));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Collections.singletonMap("error", "Error inesperado"));
-        }
-    }
+
 
     @DeleteMapping("/{id}")
     @Operation(summary = "Eliminar préstamo", description = "Elimina un préstamo existente por su ID.")
@@ -98,48 +61,96 @@ public class LoanController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Collections.singletonMap("error", e.getMessage()));
         }
     }
+    // Endpoint GET unificado
+    @GetMapping
+    @Operation(summary = "Obtener préstamos", description = "Recupera préstamos con múltiples criterios de búsqueda")
+    public ResponseEntity<?> getLoans(
+            @Parameter(description = "ID del préstamo") @RequestParam(required = false) String id,
+            @Parameter(description = "ID del usuario") @RequestParam(required = false) String userId,
+            @Parameter(description = "Estado del préstamo") @RequestParam(required = false) String status,
+            @Parameter(description = "Fecha de inicio") @RequestParam(required = false) LocalDate startDate,
+            @Parameter(description = "Fecha de fin") @RequestParam(required = false) LocalDate endDate) {
 
-    @PatchMapping("/{id}")
-    @Operation(summary = "Actualizar préstamo", description = "Actualiza campos específicos de un préstamo mediante un mapa de claves y valores.")
-    public ResponseEntity<?> updateLoan(
-        @Parameter(description = "ID del préstamo a actualizar", required = true)
-        @Valid @PathVariable String id,
-        @Parameter(description = "Campos a actualizar en el préstamo", required = true)
-        @Valid @RequestBody Map<String, Object> updates) {
         try {
-            loanService.updateLoan(id, updates);
-            return ResponseEntity.ok(Collections.singletonMap("message", "Préstamo actualizado correctamente"));
-        } catch (IllegalArgumentException | LoanException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Collections.singletonMap("error", e.getMessage()));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Collections.singletonMap("error", "Error inesperado"));
+            if (id != null) {
+                return handleGetById(id);
+            }
+            if (userId != null) {
+                return handleGetByUser(userId);
+            }
+            if (startDate != null && endDate != null) {
+                return handleGetByDateRange(startDate, endDate, status);
+            }
+            return handleGetAll(status);
+
+        } catch (LoanException | IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Collections.singletonMap("error", e.getMessage()));
         }
     }
 
+    private ResponseEntity<?> handleGetById(String id) {
+        return ResponseEntity.ok(Collections.singletonMap("loan", loanService.getLoanById(id)));
+    }
 
-    @GetMapping("/date-range")
-    @Operation(summary = "Buscar préstamos por rango de fechas", description = "Recupera los préstamos realizados entre dos fechas opcionalmente filtrados por estado.")
-    public ResponseEntity<?> getLoansByDateRange(
-        @Parameter(description = "Fecha de inicio", required = true)
-        @RequestParam LocalDate startDate,
-        @Parameter(description = "Fecha de fin", required = true)
-        @RequestParam LocalDate endDate,
-        @Parameter(description = "Estado opcional del préstamo", required = false)
-        @RequestParam(required = false) String status) {
+    private ResponseEntity<?> handleGetByUser(String userId) {
+        List<Loan> loans = loanService.getLoansByUserReport(userId);
+        return ResponseEntity.ok(Collections.singletonMap("loans", loans));
+    }
+
+    private ResponseEntity<?> handleGetByDateRange(LocalDate start, LocalDate end, String status) {
+        List<Loan> loans = loanService.getLoansByDateRangeAndStatus(start, end, status);
+        return ResponseEntity.ok(Collections.singletonMap("loans", loans));
+    }
+
+    private ResponseEntity<?> handleGetAll(String status) {
+        return ResponseEntity.ok(Collections.singletonMap("loans", loanService.getLoans(status)));
+    }
+
+    // Endpoint PATCH unificado
+    @PatchMapping("/{id}")
+    @Operation(summary = "Actualizar préstamo", description = "Actualiza préstamo y/o estados de artículos individuales")
+    public ResponseEntity<?> updateLoan(
+            @PathVariable String id,
+            @RequestBody Map<String, Object> updates) {
+
         try {
-            List<Loan> loans = loanService.getLoansByDateRangeAndStatus(startDate, endDate, status);
-            return ResponseEntity.ok(Collections.singletonMap("loans", loans));
-        } catch (LoanException e) {
+            // Manejar devolución primero
+            if (updates.containsKey("devolver") && Boolean.TRUE.equals(updates.get("devolver"))) {
+                return handleDevolver(id);
+            }
+
+            // Actualización de artículos individuales
+            if (updates.containsKey("articulos")) {
+                Map<String, String> articulosUpdate = (Map<String, String>) updates.get("articulos");
+                loanService.updateArticlesStatus(id, articulosUpdate);
+                updates.remove("articulos");
+            }
+
+            // Procesar demás actualizaciones
+            loanService.updateLoan(id, updates);
+
+            return ResponseEntity.ok().body(Map.of(
+                    "message", "Préstamo actualizado",
+                    "updated_fields", updates.keySet()
+            ));
+
+        } catch (LoanException | IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Collections.singletonMap("error", e.getMessage()));
         }
     }
 
-    @GetMapping("/user/{userId}")
-    @Operation(summary = "Obtener préstamos por usuario", description = "Recupera todos los préstamos asociados a un usuario específico.")
-    public ResponseEntity<?> getLoansByUserReport(
-        @Parameter(description = "ID del usuario", required = true)
-        @PathVariable String userId) {
-        List<Loan> loans = loanService.getLoansByUserReport(userId);
-        return ResponseEntity.ok(Collections.singletonMap("loans", loans));
+    private ResponseEntity<?> handleDevolver(String id) {
+        loanService.devolverLoan(id);
+        return ResponseEntity.ok().body(Map.of(
+                "message", "Préstamo devuelto",
+                "details", "Todos los artículos actualizados según estado del equipo"
+        ));
     }
+
+
+
+
+
+
 }
