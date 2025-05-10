@@ -87,13 +87,41 @@ class LoanTest {
 
     @Test
     void testEqualsAndHashCode() {
-        Loan loan1 = validLoan();
-        Loan loan2 = validLoan();
 
+        Loan loan1 = Loan.builder()
+                .id("123")
+                .articleIds(List.of(1, 2))
+                .nameUser("Juan")
+                .userId("U001")
+                .userRole("Estudiante")
+                .LoanDescriptionType("Préstamo para proyecto")
+                .creationDate(LocalDateTime.now())
+                .loanDate(LocalDate.of(2024, 5, 1))
+                .devolutionDate(LocalDate.of(2024, 5, 3))
+                .loanStatus("Prestado")
+                .equipmentStatus("En buen estado")
+                .devolutionRsegister("Entregado sin novedad")
+                .build();
+
+        Loan loan2 = Loan.builder()
+                .id("123")
+                .articleIds(List.of(1, 2))
+                .nameUser("Juan")
+                .userId("U001")
+                .userRole("Estudiante")
+                .LoanDescriptionType("Préstamo para proyecto")
+                .creationDate(LocalDateTime.now())
+                .loanDate(LocalDate.of(2024, 5, 1))
+                .devolutionDate(LocalDate.of(2024, 5, 3))
+                .loanStatus("Prestado")
+                .equipmentStatus("En buen estado")
+                .devolutionRsegister("Entregado sin novedad")
+                .build();
         assertThat(loan1)
             .isEqualTo(loan2)
             .hasSameHashCodeAs(loan2);
     }
+
 
 
 
