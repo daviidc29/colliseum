@@ -131,7 +131,7 @@ public class ArticleService {
     public Optional<List<Article>> findByArticleStatus(String articleStatus) {
         return articleRepository.findByName(articleStatus);
     }
-    private void checkStockAndAlert(String name) {
+    void checkStockAndAlert(String name) {
         long count = articleRepository.findByName(name)
             .orElseThrow(() -> new RuntimeException("Nombre del artículo no encontrado: " + name))
             .stream()
@@ -144,7 +144,7 @@ public class ArticleService {
         }
 
     }
-    private void checkStatusAndAlert(Article article) {
+    public void checkStatusAndAlert(Article article) {
         String status = article.getArticleStatus();
         if ("Dañado".equalsIgnoreCase(status) || "RequireMantenimiento".equalsIgnoreCase(status)) {
             String description = "El artículo \"" + article.getName() + "\" tiene estado: " + status;

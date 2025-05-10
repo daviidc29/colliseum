@@ -4,12 +4,16 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.*;
+
+import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
-import javax.persistence.Id;
+
 
 
 @Data               // Genera getters, setters, toString, equals y hashCode
+@Getter
+@Setter
 @NoArgsConstructor  // Constructor sin argumentos
 @AllArgsConstructor // Constructor con todos los campos
 @Builder

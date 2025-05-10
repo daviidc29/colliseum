@@ -14,6 +14,7 @@ import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
 
 class ArticleServiceTest {
@@ -33,33 +34,35 @@ class ArticleServiceTest {
     }
 
     @Test
-    void getAllArticlesSuccess() {
-        Article a1 = new Article(1, "Balon", "Disponible", "GOLTY\"", "/images/Balon.png");
-        Article a2 = new Article(2, "Raqueta", "Disponible", "profesional", "/images/Raqueta.png");
+    void testGetAllArticlesSuccess() {
+        List<Article> articles = Arrays.asList(new Article(1, "Laptop", "Disponible", "Desc", "img.png"));
+        when(articleRepository.findAll()).thenReturn(articles);
 
-        when(articleRepository.findAll()).thenReturn(Arrays.asList(a1, a2));
-
-        List<Article> articles = articleService.getAll();
-
-        assertEquals(2, articles.size());
-        verify(articleRepository, times(1)).findAll();
+        List<Article> result = articleService.getAll();
+        assertEquals(1, result.size());
+        assertEquals("Laptop", result.get(0).getName());
     }
 
     @Test
-    void getOneArticleSuccess() {
-        Article a = new Article(1, "Balon", "Disponible", "GOLTY", "/images/Balon.png");
-        when(articleRepository.findById(1)).thenReturn(Optional.of(a));
+    void testGetOneArticleSuccess() {
+        Article article = new Article(1, "Laptop", "Disponible", "Desc", "img.png");
+        when(articleRepository.findById(1)).thenReturn(Optional.of(article));
 
         Article result = articleService.getOne(1);
-
-        assertEquals("Balon", result.getName());
-        verify(articleRepository).findById(1);
+        assertEquals(1, result.getId());
     }
 
     @Test
     void getOneArticleThrowsWhenNullId() {
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> articleService.getOne(null));
         assertEquals("El ID del articulo no puede ser null", exception.getMessage());
+    }
+    
+    @Test
+    void testGetOneArticleNotFound() {
+        when(articleRepository.findById(99)).thenReturn(Optional.empty());
+
+        assertThrows(RuntimeException.class, () -> articleService.getOne(99));
     }
 
     @Test
@@ -111,6 +114,8 @@ class ArticleServiceTest {
         assertEquals("Balon", deleted.getName());
         verify(alertRepository).save(any(Alert.class));
         verify(articleRepository).delete(a);
+        assertEquals(1, deleted.getId());
+
     }
 
     @Test
@@ -231,5 +236,16 @@ void getAvailableCountByNameThrowsIfNameNotFound() {
 
     assertEquals("Nombre del artículo no encontrado: Lazo", exception.getMessage());
 }
+    @Test
+    void testCheckStockAndAlert() {
+        List<Article> articles = List.of(
+            new Article(1, "Laptop", "Disponible", "Desc", "img.png"),
+            new Article(2, "Laptop", "Prestado", "Desc", "img.png")
+        );
+        when(articleRepository.findByName("Laptop")).thenReturn(Optional.of(articles));
+
+        articleService.checkStockAndAlert("Laptop");
+        verify(alertRepository).save(argThat(alert -> alert.getMessage().contains("Quedan 1 disponibles")));
+    }
  
 }

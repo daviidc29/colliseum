@@ -6,14 +6,17 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
-import javax.persistence.Id;
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
 @Data               // Genera getters, setters, toString, equals y hashCode
+@Getter
+@Setter
 @NoArgsConstructor  // Constructor sin argumentos
 @AllArgsConstructor // Constructor con todos los campos
 @Builder
@@ -67,4 +70,3 @@ public class Loan {
         return 0;
     }
 }
-
