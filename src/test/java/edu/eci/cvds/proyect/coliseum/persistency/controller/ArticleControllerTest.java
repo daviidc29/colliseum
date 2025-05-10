@@ -1,6 +1,7 @@
-package edu.eci.cvds.proyect.coliseum.persistency.controller;
+package edu.eci.cvds.proyect.coliseum.persistency.Controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import edu.eci.cvds.proyect.coliseum.persistency.dto.ArticleDto;
 import edu.eci.cvds.proyect.coliseum.persistency.entity.Article;
 import edu.eci.cvds.proyect.coliseum.persistency.repository.AlertRepository;

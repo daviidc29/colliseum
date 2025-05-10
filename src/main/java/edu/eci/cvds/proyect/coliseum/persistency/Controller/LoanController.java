@@ -1,4 +1,4 @@
-package edu.eci.cvds.proyect.coliseum.persistency.controller;
+package edu.eci.cvds.proyect.coliseum.persistency.Controller;
 
 
 import edu.eci.cvds.proyect.coliseum.persistency.Exception.ArticleException;

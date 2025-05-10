@@ -10,7 +10,7 @@ import java.util.*;
 
 import static org.assertj.core.api.Assertions.*;
 
-public class LoanTest {
+class LoanTest {
 
     private static Validator validator;
 
@@ -21,7 +21,7 @@ public class LoanTest {
     }
 
     @Test
-    public void shouldCreateLoanWithBuilder() {
+    void shouldCreateLoanWithBuilder() {
         Loan loan = Loan.builder()
                 .id("123")
                 .articleIds(List.of(1, 2))
@@ -42,7 +42,7 @@ public class LoanTest {
     }
 
     @Test
-    public void shouldReturnZeroLoanTimeIfDatesMissing() {
+    void shouldReturnZeroLoanTimeIfDatesMissing() {
         Loan loan = new Loan();
         loan.setLoanDate(null);
         loan.setDevolutionDate(null);
@@ -51,7 +51,7 @@ public class LoanTest {
     }
 
     @Test
-    public void shouldValidateInvalidRole() {
+    void shouldValidateInvalidRole() {
         Loan loan = validLoan();
         loan.setUserRole("Invitado");
 
@@ -60,7 +60,7 @@ public class LoanTest {
     }
 
     @Test
-    public void shouldValidateMissingFields() {
+    void shouldValidateMissingFields() {
         Loan loan = new Loan(); // all fields null
 
         Set<ConstraintViolation<Loan>> violations = validator.validate(loan);
@@ -68,7 +68,7 @@ public class LoanTest {
     }
 
     @Test
-    public void shouldNotAllowEmptyArticleList() {
+    void shouldNotAllowEmptyArticleList() {
         Loan loan = validLoan();
         loan.setArticleIds(new ArrayList<>());
 
@@ -77,7 +77,7 @@ public class LoanTest {
     }
 
     @Test
-    public void shouldRejectTooLongDescription() {
+    void shouldRejectTooLongDescription() {
         Loan loan = validLoan();
         loan.setLoanDescriptionType("a".repeat(600));
 
@@ -86,16 +86,19 @@ public class LoanTest {
     }
 
     @Test
-    public void testEqualsAndHashCode() {
+    void testEqualsAndHashCode() {
         Loan loan1 = validLoan();
         Loan loan2 = validLoan();
 
-        assertThat(loan1).isEqualTo(loan2);
-        assertThat(loan1.hashCode()).isEqualTo(loan2.hashCode());
+        assertThat(loan1)
+            .isEqualTo(loan2)
+            .hasSameHashCodeAs(loan2);
     }
 
+
+
     @Test
-    public void testToString() {
+    void testToString() {
         Loan loan = validLoan();
         assertThat(loan.toString()).contains("Juan");
     }

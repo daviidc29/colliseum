@@ -1,8 +1,9 @@
-package edu.eci.cvds.proyect.coliseum.persistency.controller;
+package edu.eci.cvds.proyect.coliseum.persistency.Controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+
 import edu.eci.cvds.proyect.coliseum.persistency.Exception.LoanException;
 import edu.eci.cvds.proyect.coliseum.persistency.entity.Loan;
 import edu.eci.cvds.proyect.coliseum.persistency.service.LoanService;
@@ -24,7 +25,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(edu.eci.cvds.proyect.coliseum.persistency.controller.LoanController.class)
+@WebMvcTest(LoanController.class)
 class LoanControllerTest {
 
     @Autowired

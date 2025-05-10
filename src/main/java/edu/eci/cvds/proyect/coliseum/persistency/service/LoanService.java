@@ -153,7 +153,6 @@ public class LoanService {
             updateArticlesStatus(loan.getArticleIds(), newArticleStatus);
         }
 
-        // ✅ Caso 2: Actualizar artículos específicos con verificación de pertenencia
         if (updates.containsKey("articulo_estado")) {
             Map<String, String> estadosArticulos = (Map<String, String>) updates.get("articulo_estado");
             estadosArticulos.forEach((articleIdStr, newStatus) -> {
