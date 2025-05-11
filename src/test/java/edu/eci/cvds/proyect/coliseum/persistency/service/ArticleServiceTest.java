@@ -84,7 +84,7 @@ class ArticleServiceTest {
     @Test
     void saveArticleThrowsWhenNullDto() {
         RuntimeException exception = assertThrows(RuntimeException.class, () -> articleService.save(null));
-        assertEquals("El articulo no puede ser nulo", exception.getMessage());
+        assertEquals("El artículo no puede ser nulo", exception.getMessage());
     }
 
     @Test

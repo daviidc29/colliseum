@@ -119,7 +119,7 @@ class LoanControllerTest {
         Map<?, ?> body = (Map<?, ?>) response.getBody();
         assertNotNull(body);
         assertTrue(body.containsKey("error"));
-        assertEquals("El ID del préstamo no puede estar vacío", body.get("error"));
+        assertEquals("ID de préstamo inválido", body.get("error"));
 
     }
 
