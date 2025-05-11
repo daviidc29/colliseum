@@ -22,7 +22,7 @@ import lombok.Setter;
         @Size(max=500,message="El nombre del articulo no puede tener mas de 500 caracteres")
         private String name;
         @NotBlank(message="El estado del articulo no puede estar vació")
-        @Pattern(regexp = "Disponible|Dañado|RequireMantenimiento|Prestado|Devuelto|Perdido", message = "El estado del articulo no es valido")
+        @Pattern(regexp = "Disponible|Danado|RequireMantenimiento|Prestado|Devuelto|Perdido", message = "El estado del articulo no es valido")
         private String articleStatus;
         private String description;
         private String imageUrl;

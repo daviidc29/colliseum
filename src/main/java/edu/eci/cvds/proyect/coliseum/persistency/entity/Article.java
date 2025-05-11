@@ -27,7 +27,7 @@ public class Article {
 
 
     @NotBlank(message="El estado del articulo no puede estar vació")
-    @Pattern(regexp = "Disponible|Dañado|RequireMantenimiento|Prestado|Devuelto|Perdido", message = "El estado del articulo no es valido")
+    @Pattern(regexp = "Disponible|Danado|RequireMantenimiento|Prestado|Devuelto|Perdido", message = "El estado del articulo no es valido")
     private String articleStatus;
     private String description;
     private String imageUrl; 
