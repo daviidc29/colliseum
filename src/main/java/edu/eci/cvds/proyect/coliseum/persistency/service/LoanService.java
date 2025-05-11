@@ -1,4 +1,3 @@
-// LoanService.java
 package edu.eci.cvds.proyect.coliseum.persistency.service;
 
 import edu.eci.cvds.proyect.coliseum.persistency.Exception.LoanException;
@@ -20,50 +19,96 @@ import java.util.stream.Collectors;
 
 @Service
 public class LoanService {
-    public static final String PRESTADO = "Prestado";
-    public static final String VENCIDO = "Vencido";
-    public static final String DEVUELTO = "Devuelto";
+    // Enum para estados de préstamo para mayor seguridad de tipo
+    public enum LoanStatus {
+        PRESTADO("Prestado"),
+        VENCIDO("Vencido"),
+        DEVUELTO("Devuelto");
+
+        private final String value;
+
+        LoanStatus(String value) {
+            this.value = value;
+        }
+
+        public String getValue() {
+            return value;
+        }
+
+        public static boolean isValid(String status) {
+            return Arrays.stream(values())
+                    .map(LoanStatus::getValue)
+                    .anyMatch(val -> val.equals(status));
+        }
+    }
+
+    // Enum para estados de artículos
+    public enum ArticleStatus {
+        DISPONIBLE("Disponible"),
+        DANADO("Dañado"),
+        REQUIERE_MANTENIMIENTO("RequiereMantenimiento"),
+        PRESTADO("Prestado"),
+        PERDIDO("Perdido");
+
+        private final String value;
+
+        ArticleStatus(String value) {
+            this.value = value;
+        }
+
+        public String getValue() {
+            return value;
+        }
+
+        public static boolean isValid(String status) {
+            return Arrays.stream(values())
+                    .map(ArticleStatus::getValue)
+                    .anyMatch(val -> val.equals(status));
+        }
+    }
 
     private final LoanRepository loanRepository;
     private final ArticleRepository articleRepository;
     private final AlertRepository alertRepository;
 
     @Autowired
-    public LoanService(LoanRepository loanRepository, ArticleRepository articleRepository,AlertRepository alertRepository) {
-        this.loanRepository = loanRepository;
-        this.articleRepository = articleRepository;
-        this.alertRepository=alertRepository;
+    public LoanService(LoanRepository loanRepository, ArticleRepository articleRepository, AlertRepository alertRepository) {
+        this.loanRepository = Objects.requireNonNull(loanRepository, "loanRepository must not be null");
+        this.articleRepository = Objects.requireNonNull(articleRepository, "articleRepository must not be null");
+        this.alertRepository = Objects.requireNonNull(alertRepository, "alertRepository must not be null");
     }
 
     @Transactional
     public Loan createLoan(Loan loan) {
+        Objects.requireNonNull(loan, "loan must not be null");
+
         validateArticlesForLoan(loan.getArticleIds());
         configureLoanDates(loan);
-        loanValidations(loan);
-        updateArticlesStatus(loan.getArticleIds(), PRESTADO);
+        validateLoanFields(loan);
+        updateArticlesStatus(loan.getArticleIds(), LoanStatus.PRESTADO.getValue());
+
         return loanRepository.save(loan);
     }
 
     private void validateArticlesForLoan(List<Integer> articleIds) {
         if (articleIds == null || articleIds.isEmpty()) {
-            throw new LoanException("El préstamo debe contener al menos un artículo");
+            throw new LoanException.LoanExceptionStateError("El préstamo debe contener al menos un artículo");
         }
 
         List<Article> articles = articleRepository.findAllById(articleIds);
         if (articles.size() != articleIds.size()) {
-            throw new LoanException("Algunos artículos no existen");
+            throw new LoanException.LoanExceptionStateError("Algunos artículos no existen");
         }
 
-        List<Integer> noDisponibles = articles.stream()
-                .filter(article -> !"Disponible".equals(article.getArticleStatus()))
+        List<Integer> unavailableArticles = articles.stream()
+                .filter(article -> !ArticleStatus.DISPONIBLE.getValue().equals(article.getArticleStatus()))
                 .map(Article::getId)
                 .toList();
 
-        if (!noDisponibles.isEmpty()) {
-            throw new LoanException("Los siguientes artículos no están disponibles: " + noDisponibles);
+        if (!unavailableArticles.isEmpty()) {
+            throw new LoanException.LoanExceptionBookIsAvailable("Los siguientes artículos no están disponibles: " + unavailableArticles);
         }
     }
-
 
     private void configureLoanDates(Loan loan) {
         if (loan.getLoanDate() == null) {
@@ -72,25 +117,36 @@ public class LoanService {
         loan.setCreationDate(LocalDateTime.now());
     }
 
-    private void loanValidations(Loan loan) {
-        if (loan.getDevolutionDate() != null) {
-            if (loan.getLoanDate().isAfter(loan.getDevolutionDate())) {
-                throw new LoanException("La fecha de préstamo no puede ser posterior a la de devolución");
+    private void validateLoanFields(Loan loan) {
+        validateLoanDates(loan);
+        validateLoanStatus(loan);
+    }
+
+    private void validateLoanDates(Loan loan) {
+        LocalDate devolutionDate = loan.getDevolutionDate();
+        if (devolutionDate != null) {
+            if (loan.getLoanDate().isAfter(devolutionDate)) {
+                throw new LoanException.LoanExceptionTimeError("La fecha de préstamo no puede ser posterior a la de devolución");
             }
-            if (loan.getDevolutionDate().isBefore(LocalDate.now())) {
-                throw new LoanException("La fecha de devolución no puede ser en el pasado");
+            if (devolutionDate.isBefore(LocalDate.now())) {
+                throw new LoanException.LoanExceptionTimeError("La fecha de devolución no puede ser en el pasado");
             }
         }
+    }
 
-        if (!loan.getLoanStatus().matches(PRESTADO + "|" + VENCIDO + "|" + DEVUELTO)) {
-            throw new LoanException("Estado de préstamo inválido");
+    private void validateLoanStatus(Loan loan) {
+        String status = loan.getLoanStatus();
+        if (status == null || !LoanStatus.isValid(status)) {
+            throw new LoanException.LoanExceptionStateError("Estado de préstamo inválido: " + status);
         }
     }
 
     @Transactional
     public void devolverLoan(String loanId) {
+        Objects.requireNonNull(loanId, "loanId must not be null");
+
         Loan loan = getLoanById(loanId);
-        loan.setLoanStatus(DEVUELTO);
+        loan.setLoanStatus(LoanStatus.DEVUELTO.getValue());
         loan.setDevolutionDate(LocalDate.now());
 
         String newArticleStatus = determineArticleStatus(loan.getEquipmentStatus());
@@ -99,21 +155,27 @@ public class LoanService {
         loanRepository.save(loan);
     }
 
-    private String determineArticleStatus(String equipmentStatus) {
+    String determineArticleStatus(String equipmentStatus) {
+        if (equipmentStatus == null) {
+            return ArticleStatus.DISPONIBLE.getValue();
+        }
+
         return switch (equipmentStatus) {
-            case "Dañado" -> "Dañado";
-            case "Requiere mantenimiento" -> "RequiereMantenimiento";
-            default -> "Disponible";
+            case "Dañado" -> ArticleStatus.DANADO.getValue();
+            case "Requiere mantenimiento" -> ArticleStatus.REQUIERE_MANTENIMIENTO.getValue();
+            default -> ArticleStatus.DISPONIBLE.getValue();
         };
     }
 
     @Transactional
     public Loan deleteLoanById(String id) {
+        Objects.requireNonNull(id, "id must not be null");
+
         Loan loan = getLoanById(id);
         validateDeletion(loan);
 
-        if (PRESTADO.equals(loan.getLoanStatus())) {
-            updateArticlesStatus(loan.getArticleIds(), "Disponible");
+        if (LoanStatus.PRESTADO.getValue().equals(loan.getLoanStatus())) {
+            updateArticlesStatus(loan.getArticleIds(), ArticleStatus.DISPONIBLE.getValue());
         }
 
         loanRepository.delete(loan);
@@ -121,23 +183,30 @@ public class LoanService {
     }
 
     private void validateDeletion(Loan loan) {
-        if (DEVUELTO.equals(loan.getLoanStatus())) {
-            throw new LoanException("No se puede eliminar un préstamo devuelto");
+        if (LoanStatus.DEVUELTO.getValue().equals(loan.getLoanStatus())) {
+            throw new LoanException.LoanExceptionStateError("No se puede eliminar un préstamo devuelto");
         }
-        if (VENCIDO.equals(loan.getLoanStatus())) {
-            throw new LoanException("No se puede eliminar un préstamo vencido");
+        if (LoanStatus.VENCIDO.getValue().equals(loan.getLoanStatus())) {
+            throw new LoanException.LoanExceptionStateError("No se puede eliminar un préstamo vencido");
         }
     }
 
     @Transactional
     public void updateLoan(String id, Map<String, Object> updates) {
+        Objects.requireNonNull(id, "id must not be null");
+        Objects.requireNonNull(updates, "updates must not be null");
+
         Loan loan = getLoanById(id);
 
         if (updates.containsKey("estado")) {
-            handleStatusChange(loan, (String) updates.get("estado"));
+            handleStatusChange(loan, Objects.toString(updates.get("estado"), ""));
         }
 
         updates.forEach((key, value) -> {
+            if (value == null) {
+                return; // Ignore null values
+            }
+
             switch (key) {
                 case "observaciones" -> loan.setLoanDescriptionType((String) value);
                 case "fecha_devolucion" -> loan.setDevolutionDate(parseDate(value));
@@ -147,55 +216,71 @@ public class LoanService {
             }
         });
 
-        // ✅ Caso 1: Actualizar todos los artículos del préstamo
+        // Actualizar artículos
         if (updates.containsKey("equipmentStatus")) {
             String newArticleStatus = determineArticleStatus(loan.getEquipmentStatus());
             updateArticlesStatus(loan.getArticleIds(), newArticleStatus);
         }
 
         if (updates.containsKey("articulo_estado")) {
-            Map<String, String> estadosArticulos = (Map<String, String>) updates.get("articulo_estado");
-            estadosArticulos.forEach((articleIdStr, newStatus) -> {
-                try {
-                    Integer articleId = Integer.parseInt(articleIdStr);
-                    if (!loan.getArticleIds().contains(articleId)) {
-                        throw new IllegalArgumentException("El artículo " + articleId + " no pertenece al préstamo " + id);
-                    }
-                    updateSingleArticleStatus(articleId, newStatus);
-                } catch (NumberFormatException e) {
-                    throw new IllegalArgumentException("ID de artículo inválido: " + articleIdStr, e);
-                }
-            });
+            updateArticleStatesFromMap(loan, updates.get("articulo_estado"));
         }
 
-        loanValidations(loan);
+        validateLoanFields(loan);
         loanRepository.save(loan);
     }
 
+    @SuppressWarnings("unchecked")
+    private void updateArticleStatesFromMap(Loan loan, Object articleStatesObj) {
+        if (!(articleStatesObj instanceof Map)) {
+            throw new IllegalArgumentException("articulo_estado debe ser un mapa");
+        }
+
+        Map<String, String> estadosArticulos = (Map<String, String>) articleStatesObj;
+        estadosArticulos.forEach((articleIdStr, newStatus) -> {
+            try {
+                Integer articleId = Integer.parseInt(articleIdStr);
+                if (!loan.getArticleIds().contains(articleId)) {
+                    throw new IllegalArgumentException("El artículo " + articleId + " no pertenece al préstamo " + loan.getId());
+                }
+                updateSingleArticleStatus(articleId, newStatus);
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("ID de artículo inválido: " + articleIdStr);
+            }
+        });
+    }
+
     private void updateSingleArticleStatus(Integer articleId, String newStatus) {
+        if (!ArticleStatus.isValid(newStatus)) {
+            throw new IllegalArgumentException("Estado de artículo inválido: " + newStatus);
+        }
+
         Article article = articleRepository.findById(articleId)
-                .orElseThrow(() -> new IllegalArgumentException("Artículo no encontrado: " + articleId));
+                .orElseThrow(() -> new LoanException.LoanExceptionStateError("Artículo no encontrado: " + articleId));
         article.setArticleStatus(newStatus);
         articleRepository.save(article);
     }
 
-
-
     private void handleStatusChange(Loan loan, String newStatus) {
-        if (DEVUELTO.equals(newStatus)) {
+        if (!LoanStatus.isValid(newStatus)) {
+            throw new IllegalArgumentException("Estado de préstamo inválido: " + newStatus);
+        }
+
+        if (LoanStatus.DEVUELTO.getValue().equals(newStatus)) {
             devolverLoan(loan.getId());
-        } else if (VENCIDO.equals(newStatus)) {
+        } else if (LoanStatus.VENCIDO.getValue().equals(newStatus)) {
             markAsVencido(loan);
         }
     }
 
-    // Método nuevo: Recordatorios 24h antes de la fecha límite
+    // Método para recordatorios 24h antes de fecha límite
     @Scheduled(cron = "0 0 9 * * *") // Ejecuta diario a las 9:00 AM
+    @Transactional
     public void enviarRecordatoriosDevolucion() {
         LocalDate fechaRecordatorio = LocalDate.now().plusDays(1);
 
         List<Loan> prestamos = loanRepository.findByLoanStatusAndDevolutionDate(
-                PRESTADO,
+                LoanStatus.PRESTADO.getValue(),
                 fechaRecordatorio
         );
 
@@ -210,32 +295,24 @@ public class LoanService {
         });
     }
 
-    // Método nuevo: Verificación diaria de préstamos vencidos
+    // Método para verificación diaria de préstamos vencidos
     @Scheduled(cron = "0 0 9 * * *") // Ejecuta diario a las 9:00 AM
+    @Transactional
     public void verificarPrestamosVencidos() {
         List<Loan> prestamosVencidos = loanRepository.findByLoanStatusAndDevolutionDateBefore(
-                PRESTADO,
+                LoanStatus.PRESTADO.getValue(),
                 LocalDate.now()
         );
 
-        prestamosVencidos.forEach(prestamo -> {
-            this.markAsVencido(prestamo);
-
-            Alert alerta = new Alert(
-                    null,
-                    prestamo.getUserId(),
-                    "Alerta: Préstamo vencido desde " + prestamo.getDevolutionDate(),
-                    LocalDateTime.now()
-            );
-            alertRepository.save(alerta);
-        });
+        prestamosVencidos.forEach(this::markAsVencido);
     }
 
-    // Modificar método existente para incluir alerta
     @Transactional
     public void markAsVencido(Loan loan) {
-        loan.setLoanStatus(VENCIDO);
-        updateArticlesStatus(loan.getArticleIds(), "Disponible");
+        Objects.requireNonNull(loan, "loan must not be null");
+
+        loan.setLoanStatus(LoanStatus.VENCIDO.getValue());
+        updateArticlesStatus(loan.getArticleIds(), ArticleStatus.DISPONIBLE.getValue());
         loanRepository.save(loan);
 
         // Nueva alerta por estado vencido
@@ -248,17 +325,24 @@ public class LoanService {
         alertRepository.save(alerta);
     }
 
+    LocalDate parseDate(Object dateValue) {
+        if (dateValue == null) {
+            throw new IllegalArgumentException("Fecha no puede ser null");
+        }
 
-    private LocalDate parseDate(Object dateValue) {
         if (dateValue instanceof String) {
             return LocalDate.parse((String) dateValue);
         } else if (dateValue instanceof LocalDate) {
             return (LocalDate) dateValue;
         }
-        throw new IllegalArgumentException("Formato de fecha inválido");
+        throw new IllegalArgumentException("Formato de fecha inválido: " + dateValue.getClass().getName());
     }
 
     private void updateArticlesStatus(List<Integer> articleIds, String newStatus) {
+        if (articleIds == null || articleIds.isEmpty()) {
+            return;
+        }
+
         List<Article> articles = articleRepository.findAllById(articleIds);
         articles.forEach(article -> article.setArticleStatus(newStatus));
         articleRepository.saveAll(articles);
@@ -266,63 +350,83 @@ public class LoanService {
 
     // Métodos de consulta
     public List<Loan> getLoans(String status) {
-        return switch (status != null ? status : "") {
-            case "Prestado" -> loanRepository.findByLoanStatus(PRESTADO);
-            case "Vencido" -> loanRepository.findByLoanStatus(VENCIDO);
-            case "Devuelto" -> loanRepository.findByLoanStatus(DEVUELTO);
+        if (status == null || status.isEmpty()) {
+            return loanRepository.findAll();
+        }
+
+        return switch (status) {
+            case "Prestado" -> loanRepository.findByLoanStatus(LoanStatus.PRESTADO.getValue());
+            case "Vencido" -> loanRepository.findByLoanStatus(LoanStatus.VENCIDO.getValue());
+            case "Devuelto" -> loanRepository.findByLoanStatus(LoanStatus.DEVUELTO.getValue());
             default -> loanRepository.findAll();
         };
     }
 
     public Loan getLoanById(String id) {
+        Objects.requireNonNull(id, "id must not be null");
+
         return loanRepository.findById(id)
-                .orElseThrow(() -> new LoanException("Préstamo no encontrado"));
+                .orElseThrow(() -> new LoanException.LoanExceptionPrestamoIdNotFound("Préstamo no encontrado con ID: " + id));
     }
 
     public List<Loan> getLoansByUser(String userId) {
+        Objects.requireNonNull(userId, "userId must not be null");
+
         List<Loan> loans = loanRepository.findByUserId(userId);
         if (loans.isEmpty()) {
-            throw new LoanException("El usuario no tiene préstamos registrados");
+            throw new LoanException.LoanExceptionEstudianteHasNotPrestamo("El usuario no tiene préstamos registrados: " + userId);
         }
         return loans;
     }
 
     public Object getAvailableArticlesInInterval(LocalDate startDate, LocalDate endDate) {
+        validateDateRange(startDate, endDate);
+
+        List<Loan> overlappingLoans = loanRepository.findOverlappingLoans(
+                LoanStatus.PRESTADO.getValue(), startDate, endDate);
+
+        Set<Integer> unavailableArticleIds = overlappingLoans.stream()
+                .flatMap(loan -> loan.getArticleIds().stream())
+                .collect(Collectors.toSet());
+
+        return unavailableArticleIds.isEmpty()
+                ? articleRepository.findByArticleStatus(ArticleStatus.DISPONIBLE.getValue())
+                : articleRepository.findByArticleStatusAndIdNotIn(ArticleStatus.DISPONIBLE.getValue(), unavailableArticleIds);
+    }
+
+    private void validateDateRange(LocalDate startDate, LocalDate endDate) {
         if (startDate == null || endDate == null) {
             throw new IllegalArgumentException("Las fechas de inicio y fin son requeridas.");
         }
         if (startDate.isAfter(endDate)) {
             throw new IllegalArgumentException("La fecha de inicio no puede ser posterior a la fecha de fin.");
         }
-
-        List<Loan> overlappingLoans = loanRepository.findOverlappingLoans(PRESTADO, startDate, endDate);
-        Set<Integer> unavailableArticleIds = overlappingLoans.stream()
-                .flatMap(loan -> loan.getArticleIds().stream())
-                .collect(Collectors.toSet());
-
-        return unavailableArticleIds.isEmpty()
-                ? articleRepository.findByArticleStatus("Disponible")
-                : articleRepository.findByArticleStatusAndIdNotIn("Disponible", unavailableArticleIds);
     }
 
     public List<Loan> getLoansByDateRangeAndStatus(LocalDate startDate, LocalDate endDate, String status) {
-        if (startDate == null || endDate == null) {
-            throw new LoanException("Las fechas de inicio y fin son requeridas.");
+        validateDateRange(startDate, endDate);
+
+        if (status == null || status.isEmpty()) {
+            return loanRepository.findByLoanDateBetween(startDate, endDate);
         }
-        if (startDate.isAfter(endDate)) {
-            throw new LoanException("La fecha de inicio no puede ser posterior a la fecha de fin.");
+
+        if (!LoanStatus.isValid(status)) {
+            throw new IllegalArgumentException("Estado de préstamo inválido: " + status);
         }
-        return (status == null || status.isEmpty())
-                ? loanRepository.findByLoanDateBetween(startDate, endDate)
-                : loanRepository.findByLoanDateBetweenAndLoanStatus(startDate, endDate, status);
+
+        return loanRepository.findByLoanDateBetweenAndLoanStatus(startDate, endDate, status);
     }
 
     public List<Loan> getLoansByUserReport(String userId) {
+        Objects.requireNonNull(userId, "userId must not be null");
         return loanRepository.findByUserId(userId);
-
     }
+
     @Transactional
     public void updateArticlesStatus(String loanId, Map<String, String> articulosUpdate) {
+        Objects.requireNonNull(loanId, "loanId must not be null");
+        Objects.requireNonNull(articulosUpdate, "articulosUpdate must not be null");
+
         Loan loan = getLoanById(loanId);
         List<Integer> validArticleIds = loan.getArticleIds();
 
@@ -334,7 +438,7 @@ public class LoanService {
                     throw new IllegalArgumentException("Artículo " + articleId + " no pertenece al préstamo");
                 }
 
-                if (!isValidArticleStatus(newStatus)) {
+                if (!ArticleStatus.isValid(newStatus)) {
                     throw new IllegalArgumentException("Estado inválido para artículo: " + newStatus);
                 }
 
@@ -342,18 +446,9 @@ public class LoanService {
                     article.setArticleStatus(newStatus);
                     articleRepository.save(article);
                 });
-
             } catch (NumberFormatException e) {
                 throw new IllegalArgumentException("ID de artículo inválido: " + articleIdStr);
             }
         });
     }
-
-    private boolean isValidArticleStatus(String status) {
-        return List.of("Disponible", "Dañado", "RequiereMantenimiento", "Prestado", "Perdido")
-                .contains(status);
-    }
-
-
-
 }

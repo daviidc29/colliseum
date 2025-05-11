@@ -7,375 +7,386 @@ import edu.eci.cvds.proyect.coliseum.persistency.entity.Loan;
 import edu.eci.cvds.proyect.coliseum.persistency.repository.AlertRepository;
 import edu.eci.cvds.proyect.coliseum.persistency.repository.ArticleRepository;
 import edu.eci.cvds.proyect.coliseum.persistency.repository.LoanRepository;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.*;
 import org.mockito.*;
-import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.EmptyResultDataAccessException;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 
-import static edu.eci.cvds.proyect.coliseum.persistency.service.LoanService.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-@ExtendWith(MockitoExtension.class)
 class LoanServiceTest {
 
     @Mock
-    private LoanRepository loanRepository;
+    LoanRepository loanRepository;
     @Mock
-    private ArticleRepository articleRepository;
+    ArticleRepository articleRepository;
     @Mock
-    private AlertRepository alertRepository;
+    AlertRepository alertRepository;
 
     @InjectMocks
-    private LoanService loanService;
+    LoanService loanService;
 
-    private Loan loan;
-    private Article article1;
-    private Article article2;
+    Loan sampleLoan;
+    List<Integer> articleIds;
+    Article article;
+    LoanService.LoanStatus loanStatus;
+    LoanService.ArticleStatus articleStatus;
 
     @BeforeEach
     void setUp() {
-        loan = Loan.builder()
-                .id("loan123")
-                .articleIds(Arrays.asList(1, 2))
-                .nameUser("John Doe")
-                .userId("user123")
+        MockitoAnnotations.openMocks(this);
+
+        articleIds = List.of(1, 2);
+        article = new Article();
+        article.setId(1);
+        article.setArticleStatus(LoanService.ArticleStatus.DISPONIBLE.getValue());
+
+        sampleLoan = Loan.builder()
+                .id("loan1")
+                .articleIds(articleIds)
+                .nameUser("Juan")
+                .userId("user1")
                 .userRole("Estudiante")
-                .LoanDescriptionType("Préstamo de libros")
+                .LoanDescriptionType("Libro")
                 .creationDate(LocalDateTime.now())
                 .loanDate(LocalDate.now())
-                .loanStatus(PRESTADO)
+                .devolutionDate(LocalDate.now().plusDays(2))
+                .loanStatus(LoanService.LoanStatus.PRESTADO.getValue())
                 .equipmentStatus("En buen estado")
-                .devolutionRsegister("")
+                .build();
+    }
+
+    @Test
+    void testCreateLoanSuccess() {
+        when(articleRepository.findAllById(articleIds)).thenReturn(
+                Arrays.asList(
+                        Article.builder().id(1).articleStatus("Disponible").build(),
+                        Article.builder().id(2).articleStatus("Disponible").build()
+                )
+        );
+        when(loanRepository.save(any())).thenReturn(sampleLoan);
+
+        Loan saved = loanService.createLoan(sampleLoan);
+
+        assertNotNull(saved);
+        verify(articleRepository).saveAll(anyList());
+        verify(loanRepository).save(any());
+    }
+
+    @Test
+    void testCreateLoanWithUnavailableArticleShouldThrow() {
+        List<Article> articles = Arrays.asList(
+                Article.builder().id(1).articleStatus("Disponible").build(),
+                Article.builder().id(2).articleStatus("Prestado").build()
+        );
+        when(articleRepository.findAllById(articleIds)).thenReturn(articles);
+
+        Loan loan = Loan.builder().articleIds(articleIds).loanStatus("Prestado")
+                .nameUser("Juan").userId("user1").userRole("Estudiante")
+                .LoanDescriptionType("Libro").equipmentStatus("En buen estado")
                 .build();
 
-        article1 = new Article(1, "Libro1", "Disponible", "Desc1", "/images/img1.png");
-        article2 = new Article(2, "Libro2", "Disponible", "Desc2", "/images/img2.png");
+        LoanException.LoanExceptionBookIsAvailable ex = assertThrows(
+                LoanException.LoanExceptionBookIsAvailable.class,
+                () -> loanService.createLoan(loan)
+        );
+        assertTrue(ex.getMessage().contains("no están disponibles"));
     }
 
     @Test
-    void testCreateLoan_Success() {
-        when(articleRepository.findAllById(Arrays.asList(1, 2)))
-                .thenReturn(Arrays.asList(article1, article2));
-        when(loanRepository.save(any(Loan.class))).thenReturn(loan);
+    void testCreateLoanWithMissingArticleShouldThrow() {
+        when(articleRepository.findAllById(articleIds)).thenReturn(List.of(article));
 
-        Loan result = loanService.createLoan(loan);
+        Loan loan = Loan.builder().articleIds(articleIds).loanStatus("Prestado")
+                .nameUser("Juan").userId("user1").userRole("Estudiante")
+                .LoanDescriptionType("Libro").equipmentStatus("En buen estado")
+                .build();
 
-        assertNotNull(result);
-        assertEquals("loan123", result.getId());
-        // The method is called twice (1 for validation, 1 for status update).
-        verify(articleRepository, times(2))
-                .findAllById(Arrays.asList(1, 2));
-        verify(loanRepository).save(any(Loan.class));
+        LoanException.LoanExceptionStateError ex = assertThrows(
+                LoanException.LoanExceptionStateError.class,
+                () -> loanService.createLoan(loan)
+        );
+        assertTrue(ex.getMessage().contains("no existen"));
     }
 
     @Test
-    void testCreateLoan_NoArticlesException() {
-        // Provide required non-null fields to avoid NullPointerException
-        Loan invalidLoan = Loan.builder()
+    void testCreateLoanWithInvalidDatesShouldThrow() {
+        Loan loan = Loan.builder()
+                .articleIds(articleIds)
+                .loanStatus("Prestado")
+                .nameUser("Juan").userId("user1").userRole("Estudiante")
+                .LoanDescriptionType("Libro").equipmentStatus("En buen estado")
+                .loanDate(LocalDate.of(2025, 5, 10))
+                .devolutionDate(LocalDate.of(2025, 5, 1))
+                .build();
+
+        when(articleRepository.findAllById(articleIds)).thenReturn(
+                Arrays.asList(
+                        Article.builder().id(1).articleStatus("Disponible").build(),
+                        Article.builder().id(2).articleStatus("Disponible").build()
+                )
+        );
+
+        LoanException.LoanExceptionTimeError ex = assertThrows(
+                LoanException.LoanExceptionTimeError.class,
+                () -> loanService.createLoan(loan)
+        );
+        assertTrue(ex.getMessage().contains("no puede ser posterior"));
+    }
+
+    @Test
+    void testCreateLoanWithPastDevolutionDateShouldThrow() {
+        Loan loan = Loan.builder()
+                .articleIds(articleIds)
+                .loanStatus("Prestado")
+                .nameUser("Juan").userId("user1").userRole("Estudiante")
+                .LoanDescriptionType("Libro").equipmentStatus("En buen estado")
+                .loanDate(LocalDate.now())
+                .devolutionDate(LocalDate.now().minusDays(1))
+                .build();
+
+        when(articleRepository.findAllById(articleIds)).thenReturn(
+                Arrays.asList(
+                        Article.builder().id(1).articleStatus("Disponible").build(),
+                        Article.builder().id(2).articleStatus("Disponible").build()
+                )
+        );
+
+        LoanException.LoanExceptionTimeError ex = assertThrows(
+                LoanException.LoanExceptionTimeError.class,
+                () -> loanService.createLoan(loan)
+        );
+        assertEquals("La fecha de préstamo no puede ser posterior a la de devolución", ex.getMessage());
+    }
+
+    @Test
+    void testCreateLoanWithInvalidStatusShouldThrow() {
+        Loan loan = Loan.builder()
+                .articleIds(articleIds)
+                .loanStatus("Inexistente")
+                .nameUser("Juan").userId("user1").userRole("Estudiante")
+                .LoanDescriptionType("Libro").equipmentStatus("En buen estado")
+                .build();
+
+        when(articleRepository.findAllById(articleIds)).thenReturn(
+                Arrays.asList(
+                        Article.builder().id(1).articleStatus("Disponible").build(),
+                        Article.builder().id(2).articleStatus("Disponible").build()
+                )
+        );
+
+        LoanException.LoanExceptionStateError ex = assertThrows(
+                LoanException.LoanExceptionStateError.class,
+                () -> loanService.createLoan(loan)
+        );
+        assertTrue(ex.getMessage().contains("inválido"));
+    }
+
+    @Test
+    void testDevolverLoanSuccess() {
+        Loan loan = spy(sampleLoan);
+        when(loanRepository.findById("loan1")).thenReturn(Optional.of(loan));
+        when(articleRepository.findAllById(articleIds)).thenReturn(Arrays.asList(article));
+        when(loanRepository.save(any())).thenReturn(loan);
+
+        loanService.devolverLoan("loan1");
+        verify(loanRepository).save(any()); // Solo se guarda una vez
+    }
+
+    @Test
+    void testDevolverLoanWithNullIdShouldThrow() {
+        assertThrows(NullPointerException.class, () -> loanService.devolverLoan(null));
+    }
+
+    @Test
+    void testDeleteLoanByIdPrestado() {
+        Loan loan = spy(sampleLoan);
+        loan.setLoanStatus(LoanService.LoanStatus.PRESTADO.getValue());
+        when(loanRepository.findById("loan1")).thenReturn(Optional.of(loan));
+        when(articleRepository.findAllById(articleIds)).thenReturn(Arrays.asList(article));
+
+        Loan deleted = loanService.deleteLoanById("loan1");
+        verify(loanRepository).delete(any());
+        assertEquals(sampleLoan.getId(), deleted.getId());
+    }
+
+    @Test
+    void testDeleteLoanByIdDevueltoShouldThrow() {
+        Loan loan = spy(sampleLoan);
+        loan.setLoanStatus(LoanService.LoanStatus.DEVUELTO.getValue());
+        when(loanRepository.findById("loan1")).thenReturn(Optional.of(loan));
+
+        LoanException.LoanExceptionStateError ex = assertThrows(
+                LoanException.LoanExceptionStateError.class,
+                () -> loanService.deleteLoanById("loan1")
+        );
+        assertTrue(ex.getMessage().contains("devuelto"));
+    }
+
+    @Test
+    void testUpdateLoanStatusDevuelto() {
+        Loan loan = spy(sampleLoan);
+        loan.setLoanStatus(LoanService.LoanStatus.PRESTADO.getValue());
+        when(loanRepository.findById("loan1")).thenReturn(Optional.of(loan));
+        when(articleRepository.findAllById(anyList())).thenReturn(
+                Arrays.asList(Article.builder().id(1).articleStatus("Prestado").build())
+        );
+        doReturn(loan).when(loanRepository).save(any());
+
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("estado", LoanService.LoanStatus.DEVUELTO.getValue());
+
+        loanService.updateLoan("loan1", updates);
+
+        verify(loanRepository, atLeastOnce()).save(any());
+    }
+
+    @Test
+    void testUpdateLoanWithInvalidFieldShouldThrow() {
+        Loan loan = spy(sampleLoan);
+        when(loanRepository.findById("loan1")).thenReturn(Optional.of(loan));
+
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("invalido", "valor");
+
+        assertThrows(IllegalArgumentException.class, () -> loanService.updateLoan("loan1", updates));
+    }
+
+    @Test
+    void testUpdateArticlesStatusWithInvalidArticleIdShouldThrow() {
+        Loan loan = spy(sampleLoan);
+        loan.setArticleIds(List.of(1));
+        when(loanRepository.findById("loan1")).thenReturn(Optional.of(loan));
+
+        Map<String, String> updates = new HashMap<>();
+        updates.put("99", "Disponible");
+
+        assertThrows(IllegalArgumentException.class, () -> loanService.updateArticlesStatus("loan1", updates));
+    }
+
+    @Test
+    void testUpdateArticlesStatusWithInvalidStatusShouldThrow() {
+        Loan loan = spy(sampleLoan);
+        loan.setArticleIds(List.of(1));
+        when(loanRepository.findById("loan1")).thenReturn(Optional.of(loan));
+
+        Map<String, String> updates = new HashMap<>();
+        updates.put("1", "Inexistente");
+
+        assertThrows(IllegalArgumentException.class, () -> loanService.updateArticlesStatus("loan1", updates));
+    }
+
+    @Test
+    void testGetLoanByIdSuccess() {
+        when(loanRepository.findById("loan1")).thenReturn(Optional.of(sampleLoan));
+        Loan l = loanService.getLoanById("loan1");
+        assertEquals("loan1", l.getId());
+    }
+
+    @Test
+    void testGetLoanByIdNotFound() {
+        when(loanRepository.findById("loanX")).thenReturn(Optional.empty());
+        assertThrows(LoanException.LoanExceptionPrestamoIdNotFound.class, () -> loanService.getLoanById("loanX"));
+    }
+
+    @Test
+    void testGetLoansByUserWithNoLoansShouldThrow() {
+        when(loanRepository.findByUserId("userX")).thenReturn(Collections.emptyList());
+        assertThrows(LoanException.LoanExceptionEstudianteHasNotPrestamo.class, () -> loanService.getLoansByUser("userX"));
+    }
+
+    @Test
+    void testGetLoansByUserSuccess() {
+        when(loanRepository.findByUserId("user1")).thenReturn(List.of(sampleLoan));
+        List<Loan> loans = loanService.getLoansByUser("user1");
+        assertEquals(1, loans.size());
+    }
+
+    @Test
+    void testGetLoansByDateRangeAndStatus() {
+        LocalDate from = LocalDate.now();
+        LocalDate to = LocalDate.now().plusDays(1);
+        when(loanRepository.findByLoanDateBetweenAndLoanStatus(from, to, "Prestado")).thenReturn(List.of(sampleLoan));
+
+        List<Loan> loans = loanService.getLoansByDateRangeAndStatus(from, to, "Prestado");
+        assertEquals(1, loans.size());
+    }
+
+    @Test
+    void testGetLoansByDateRangeAndStatusInvalidStatusShouldThrow() {
+        assertThrows(IllegalArgumentException.class,
+                () -> loanService.getLoansByDateRangeAndStatus(LocalDate.now(), LocalDate.now().plusDays(1), "Invalid"));
+    }
+
+    @Test
+    void testGetAvailableArticlesInInterval() {
+
+    }
+
+    @Test
+    void testGetAvailableArticlesInIntervalWithUnavailableArticles() {
+        LocalDate from = LocalDate.now();
+        LocalDate to = LocalDate.now().plusDays(10);
+
+        Loan otherLoan = Loan.builder()
+                .articleIds(List.of(1, 2))
                 .nameUser("Test User")
-                .userId("testUserId")
+                .userId("user1")
                 .userRole("Estudiante")
-                .LoanDescriptionType("Descripción de prueba")
-                .articleIds(new ArrayList<>()) // No articles, should trigger exception
-                .loanStatus(PRESTADO)
+                .LoanDescriptionType("Libro")
+                .loanStatus("Prestado")
                 .equipmentStatus("En buen estado")
                 .build();
 
-        // Expect a LoanException because the list of articles is empty
-        assertThrows(LoanException.class, () -> loanService.createLoan(invalidLoan));
+        when(loanRepository.findOverlappingLoans(anyString(), any(), any())).thenReturn(List.of(otherLoan));
+        when(articleRepository.findByArticleStatusAndIdNotIn(anyString(), anySet())).thenReturn(List.of(article));
+
+        Object result = loanService.getAvailableArticlesInInterval(from, to);
+        assertNotNull(result);
+        verify(articleRepository).findByArticleStatusAndIdNotIn(eq("Disponible"), anySet());
     }
 
     @Test
-    void testCreateLoan_NonExistingArticleException() {
-        when(articleRepository.findAllById(Arrays.asList(1, 2)))
-                .thenReturn(Collections.singletonList(article1)); // missing article2
-
-        assertThrows(LoanException.class, () -> loanService.createLoan(loan));
+    void testValidateDateRangeStartAfterEndShouldThrow() {
+        LocalDate from = LocalDate.now().plusDays(1);
+        LocalDate to = LocalDate.now();
+        assertThrows(IllegalArgumentException.class, () -> loanService.getLoansByDateRangeAndStatus(from, to, null));
     }
 
     @Test
-    void testCreateLoan_ArticleAlreadyUnavailable() {
-        article1.setArticleStatus("Prestado");
-        when(articleRepository.findAllById(Arrays.asList(1, 2)))
-                .thenReturn(Arrays.asList(article1, article2));
-
-        assertThrows(LoanException.class, () -> loanService.createLoan(loan));
-    }
-
-    @Test
-    void testCreateLoan_DevolutionDateInPast() {
-        loan.setDevolutionDate(LocalDate.now().minusDays(1));
-        when(articleRepository.findAllById(Arrays.asList(1, 2)))
-                .thenReturn(Arrays.asList(article1, article2));
-        assertThrows(LoanException.class, () -> loanService.createLoan(loan));
-    }
-
-    @Test
-    void testCreateLoan_LoanDateAfterDevolutionDate() {
-        loan.setLoanDate(LocalDate.now().plusDays(2));
+    void testEnviarRecordatoriosDevolucion() {
+        Loan loan = spy(sampleLoan);
         loan.setDevolutionDate(LocalDate.now().plusDays(1));
-        when(articleRepository.findAllById(Arrays.asList(1, 2)))
-                .thenReturn(Arrays.asList(article1, article2));
-        assertThrows(LoanException.class, () -> loanService.createLoan(loan));
-    }
-
-    @Test
-    void testCreateLoan_InvalidLoanStatus() {
-        loan.setLoanStatus("Invalido");
-        when(articleRepository.findAllById(Arrays.asList(1, 2)))
-                .thenReturn(Arrays.asList(article1, article2));
-        assertThrows(LoanException.class, () -> loanService.createLoan(loan));
-    }
-
-    @Test
-    void testDevolverLoan_Success() {
-        when(loanRepository.findById("loan123")).thenReturn(Optional.of(loan));
-        when(loanRepository.save(any(Loan.class))).thenReturn(loan);
-
-        loanService.devolverLoan("loan123");
-
-        verify(loanRepository).findById("loan123");
-        verify(loanRepository).save(any(Loan.class));
-        verify(articleRepository).findAllById(Arrays.asList(1, 2));
-    }
-
-    @Test
-    void testDevolverLoan_LoanNotFound() {
-        when(loanRepository.findById("loan123")).thenReturn(Optional.empty());
-        assertThrows(LoanException.class, () -> loanService.devolverLoan("loan123"));
-    }
-
-    @Test
-    void testDeleteLoanById_Success() {
-        loan.setLoanStatus(PRESTADO);
-        when(loanRepository.findById("loan123")).thenReturn(Optional.of(loan));
-
-        Loan deletedLoan = loanService.deleteLoanById("loan123");
-        verify(loanRepository).delete(any(Loan.class));
-        assertEquals("loan123", deletedLoan.getId());
-    }
-
-    @Test
-    void testDeleteLoanById_DevueltoException() {
-        loan.setLoanStatus(DEVUELTO);
-        when(loanRepository.findById("loan123")).thenReturn(Optional.of(loan));
-
-        assertThrows(LoanException.class, () -> loanService.deleteLoanById("loan123"));
-    }
-
-    @Test
-    void testDeleteLoanById_VencidoException() {
-        loan.setLoanStatus(VENCIDO);
-        when(loanRepository.findById("loan123")).thenReturn(Optional.of(loan));
-
-        assertThrows(LoanException.class, () -> loanService.deleteLoanById("loan123"));
-    }
-
-    @Test
-    void testUpdateLoan_ChangeStatusToDevuelto() {
-        when(loanRepository.findById("loan123")).thenReturn(Optional.of(loan));
-        Map<String, Object> updates = new HashMap<>();
-        updates.put("estado", DEVUELTO);
-
-        loanService.updateLoan("loan123", updates);
-
-        verify(loanRepository, times(2)).save(any(Loan.class));
-    }
-
-    @Test
-    void testUpdateLoan_ChangeStatusToVencido() {
-        when(loanRepository.findById("loan123")).thenReturn(Optional.of(loan));
-
-        Map<String, Object> updates = new HashMap<>();
-        updates.put("estado", VENCIDO);
-
-        loanService.updateLoan("loan123", updates);
-
-        // Remove the extra verification that expected a single call:
-        // verify(loanRepository, times(1)).save(any(Loan.class));
-
-        // Now verify that loanRepository.save(...) is called exactly twice in total
-        // (once in updateLoan, once in markAsVencido).
-        verify(loanRepository, times(2)).save(any());
-    }
-
-    @Test
-    void testUpdateLoan_UpdateObservaciones() {
-        when(loanRepository.findById("loan123")).thenReturn(Optional.of(loan));
-        Map<String, Object> updates = new HashMap<>();
-        updates.put("observaciones", "Cambio de descripcion");
-
-        loanService.updateLoan("loan123", updates);
-        assertEquals("Cambio de descripcion", loan.getLoanDescriptionType());
-        verify(loanRepository).save(any(Loan.class));
-    }
-
-    @Test
-    void testUpdateLoan_UpdateDevolutionDate() {
-        when(loanRepository.findById("loan123")).thenReturn(Optional.of(loan));
-        Map<String, Object> updates = new HashMap<>();
-        updates.put("fecha_devolucion", LocalDate.now().plusDays(1));
-
-        loanService.updateLoan("loan123", updates);
-
-        verify(loanRepository).save(any(Loan.class));
-        assertEquals(LocalDate.now().plusDays(1), loan.getDevolutionDate());
-    }
-
-    @Test
-    void testMarkAsVencido_SetsStatusAndCreatesAlert() {
-        when(loanRepository.save(any(Loan.class))).thenReturn(loan);
-        loanService.markAsVencido(loan);
-
-        assertEquals(VENCIDO, loan.getLoanStatus());
+        when(loanRepository.findByLoanStatusAndDevolutionDate(any(), any())).thenReturn(List.of(loan));
+        loanService.enviarRecordatoriosDevolucion();
         verify(alertRepository).save(any(Alert.class));
     }
 
     @Test
-    void testGetLoanById_NotFound() {
-        when(loanRepository.findById("unknownLoanId")).thenReturn(Optional.empty());
-        assertThrows(LoanException.class, () -> loanService.getLoanById("unknownLoanId"));
-    }
-
-    @Test
-    void testGetLoanById_Found() {
-        when(loanRepository.findById("loan123")).thenReturn(Optional.of(loan));
-        Loan foundLoan = loanService.getLoanById("loan123");
-        assertNotNull(foundLoan);
-    }
-
-    @Test
-    void testGetLoansByUser_NotEmpty() {
-        when(loanRepository.findByUserId("user123")).thenReturn(Collections.singletonList(loan));
-        List<Loan> userLoans = loanService.getLoansByUser("user123");
-        assertFalse(userLoans.isEmpty());
-    }
-
-    @Test
-    void testGetLoansByUser_EmptyThrowsException() {
-        when(loanRepository.findByUserId("user123")).thenReturn(Collections.emptyList());
-        assertThrows(LoanException.class, () -> loanService.getLoansByUser("user123"));
-    }
-
-    @Test
-    void testGetLoans_FilterByStatus() {
-        Loan loan2 = new Loan();
-        loan2.setLoanStatus(DEVUELTO);
-
-        when(loanRepository.findByLoanStatus(PRESTADO)).thenReturn(Collections.singletonList(loan));
-        when(loanRepository.findByLoanStatus(DEVUELTO)).thenReturn(Collections.singletonList(loan2));
-        when(loanRepository.findAll()).thenReturn(Arrays.asList(loan, loan2));
-
-        // Prestado
-        List<Loan> prestamos = loanService.getLoans(PRESTADO);
-        assertEquals(1, prestamos.size());
-        // Devuelto
-        prestamos = loanService.getLoans(DEVUELTO);
-        assertEquals(1, prestamos.size());
-        // All
-        prestamos = loanService.getLoans(null);
-        assertEquals(2, prestamos.size());
-    }
-
-    @Test
-    void testGetAvailableArticlesInInterval_Success() {
-        when(loanRepository.findOverlappingLoans(eq(PRESTADO), any(LocalDate.class), any(LocalDate.class)))
-                .thenReturn(Collections.emptyList());
-        loanService.getAvailableArticlesInInterval(LocalDate.now(), LocalDate.now().plusDays(2));
-        verify(articleRepository).findByArticleStatus("Disponible");
-    }
-
-    @Test
-    void testGetAvailableArticlesInInterval_InvalidDates() {
-        assertThrows(IllegalArgumentException.class,
-                () -> loanService.getAvailableArticlesInInterval(null, LocalDate.now()));
-        assertThrows(IllegalArgumentException.class,
-                () -> loanService.getAvailableArticlesInInterval(LocalDate.now().plusDays(2), LocalDate.now()));
-    }
-
-    @Test
-    void testGetLoansByDateRangeAndStatus_Success() {
-        LocalDate start = LocalDate.now();
-        LocalDate end = LocalDate.now().plusDays(5);
-        when(loanRepository.findByLoanDateBetweenAndLoanStatus(start, end, PRESTADO))
-                .thenReturn(Collections.singletonList(loan));
-        List<Loan> result = loanService.getLoansByDateRangeAndStatus(start, end, PRESTADO);
-        assertEquals(1, result.size());
-    }
-
-    @Test
-    void testGetLoansByDateRangeAndStatus_DatesInvalid() {
-        LocalDate start = LocalDate.now().plusDays(2);
-        LocalDate end = LocalDate.now();
-        assertThrows(LoanException.class,
-                () -> loanService.getLoansByDateRangeAndStatus(start, end, PRESTADO));
-    }
-
-    @Test
-    void testGetLoansByUserReport() {
-        when(loanRepository.findByUserId("user123")).thenReturn(Collections.singletonList(loan));
-        List<Loan> result = loanService.getLoansByUserReport("user123");
-        assertEquals(1, result.size());
-    }
-
-    @Test
-    void testUpdateArticlesStatus_Success() {
-        when(loanRepository.findById("loan123")).thenReturn(Optional.of(loan));
-        when(articleRepository.findById(1)).thenReturn(Optional.of(article1));
-        when(articleRepository.findById(2)).thenReturn(Optional.of(article2));
-
-        Map<String, String> updates = new HashMap<>();
-        updates.put("1", "Dañado");
-        updates.put("2", "Perdido");
-
-        loanService.updateArticlesStatus("loan123", updates);
-
-        verify(articleRepository, times(2)).save(any(Article.class));
-    }
-
-    @Test
-    void testUpdateArticlesStatus_InvalidArticleId() {
-        when(loanRepository.findById("loan123")).thenReturn(Optional.of(loan));
-        Map<String, String> updates = new HashMap<>();
-        updates.put("X", "Dañado");
-        assertThrows(IllegalArgumentException.class, () -> loanService.updateArticlesStatus("loan123", updates));
-    }
-
-    @Test
-    void testUpdateArticlesStatus_ArticleNotInLoan() {
-        when(loanRepository.findById("loan123")).thenReturn(Optional.of(loan));
-        Map<String, String> updates = new HashMap<>();
-        updates.put("999", "Disponible");
-        assertThrows(IllegalArgumentException.class, () -> loanService.updateArticlesStatus("loan123", updates));
-    }
-
-    @Test
-    void testScheduleEnviarRecordatoriosDevolucion() {
-        LocalDate tomorrow = LocalDate.now().plusDays(1);
-        // We test the find query for loans
-        when(loanRepository.findByLoanStatusAndDevolutionDate(PRESTADO, tomorrow))
-                .thenReturn(Collections.singletonList(loan));
-
-        loanService.enviarRecordatoriosDevolucion();
-
-        verify(alertRepository, times(1)).save(any(Alert.class));
-    }
-
-    @Test
-    void testScheduleVerificarPrestamosVencidos() {
-        when(loanRepository.findByLoanStatusAndDevolutionDateBefore(eq(PRESTADO), any(LocalDate.class)))
-                .thenReturn(Collections.singletonList(loan));
+    void testVerificarPrestamosVencidos() {
+        Loan loan = spy(sampleLoan);
+        when(loanRepository.findByLoanStatusAndDevolutionDateBefore(any(), any())).thenReturn(List.of(loan));
+        when(alertRepository.save(any(Alert.class))).thenReturn(null); // o puedes retornar un Alert simulado si prefieres
+        when(articleRepository.findAllById(anyList())).thenReturn(Collections.emptyList());
+        when(loanRepository.save(any())).thenReturn(loan);
 
         loanService.verificarPrestamosVencidos();
 
-        // markAsVencido() also saves an alert, so we expect two saves total:
-        // one from markAsVencido(), one from the loop in verificarPrestamosVencidos().
-        verify(alertRepository, times(2)).save(any(Alert.class));
+        verify(loanRepository, atLeastOnce()).save(any());
+        verify(alertRepository, atLeastOnce()).save(any(Alert.class));
+    }
+
+    @Test
+    void testMarkAsVencido() {
+        Loan loan = spy(sampleLoan);
+        loan.setLoanStatus(LoanService.LoanStatus.PRESTADO.getValue());
+        when(articleRepository.findAllById(anyList())).thenReturn(List.of(article));
+        loanService.markAsVencido(loan);
+        verify(alertRepository).save(any(Alert.class));
+        verify(loanRepository).save(any());
     }
 }

@@ -1,207 +1,403 @@
 package edu.eci.cvds.proyect.coliseum.persistency.Controller;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-
+import edu.eci.cvds.proyect.coliseum.persistency.Exception.ArticleException;
 import edu.eci.cvds.proyect.coliseum.persistency.Exception.LoanException;
 import edu.eci.cvds.proyect.coliseum.persistency.entity.Loan;
 import edu.eci.cvds.proyect.coliseum.persistency.service.LoanService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MockMvc;
+import org.mockito.*;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 
+import java.lang.reflect.InvocationTargetException;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
-import static org.mockito.ArgumentMatchers.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
-@WebMvcTest(LoanController.class)
 class LoanControllerTest {
 
-    @Autowired
-    private MockMvc mockMvc;
-
-    @MockBean
+    @Mock
     private LoanService loanService;
 
-    private Loan loan;
+    @InjectMocks
+    private LoanController loanController;
 
     @BeforeEach
-     void setUp() {
-        loan = new Loan();
-        loan.setId("loan1");
-        loan.setUserId("user123");
-        loan.setArticleIds(List.of(1, 2));
-        loan.setLoanStatus("Prestado");
-        loan.setLoanDate(LocalDate.now());
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+    }
+
+    // --- createLoan ---
+
+    @Test
+    void createLoan_Success() {
+        Loan loan = new Loan();
+        loan.setUserId("U-12345");
+        Loan savedLoan = new Loan();
+        savedLoan.setId("LN-123");
+        when(loanService.createLoan(loan)).thenReturn(savedLoan);
+
+        ResponseEntity<Map<String, Object>> response = loanController.createLoan(loan);
+
+        assertEquals(HttpStatus.CREATED, response.getStatusCode());
+        assertTrue(response.getBody().containsKey("loan"));
+        assertEquals(savedLoan, response.getBody().get("loan"));
+        verify(loanService, times(1)).createLoan(loan);
     }
 
     @Test
-    void testCreateLoanSuccess() throws Exception {
-        // Configurar ObjectMapper para manejar fechas
-        ObjectMapper mapper = new ObjectMapper()
-                .registerModule(new JavaTimeModule())
-                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+    void createLoan_ThrowsLoanException_ReturnsBadRequest() {
+        Loan loan = new Loan();
+        loan.setUserId("U-12345");
+        when(loanService.createLoan(loan)).thenThrow(new LoanException("error test"));
 
-        // Crear un préstamo válido (igual al mock)
-        Loan loan1 = new Loan();
-        loan1.setId("loan1");
-        loan1.setArticleIds(List.of(1, 2));
-        loan1.setUserId("user123");
-        loan1.setNameUser("Nombre Usuario");
-        loan1.setUserRole("Estudiante");
-        loan1.setLoanDate(LocalDate.now());
-        loan1.setLoanStatus("Prestado");
-        loan1.setLoanDescriptionType("Descripción válida");
-        loan1.setEquipmentStatus("En buen estado");
-        // Asegurar que los campos no nulos estén presentes
-        loan1.setCreationDate(LocalDateTime.now()); // Si es necesario según la lógica de la aplicación
+        ResponseEntity<Map<String, Object>> response = loanController.createLoan(loan);
 
-        // Mock del servicio
-        Mockito.when(loanService.createLoan(any(Loan.class))).thenReturn(loan1);
-
-        // Ejecutar la solicitud
-        mockMvc.perform(post("/loan")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(mapper.writeValueAsString(loan1)))
-                .andExpect(status().isCreated())
-                // Ajustar la ruta del JSON para coincidir con la estructura de la respuesta
-                .andExpect(jsonPath("$.loan.id").value("loan1"))
-                // Verificar otros campos relevantes si es necesario
-                .andExpect(jsonPath("$.loan.userId").value("user123"))
-                .andExpect(jsonPath("$.loan.loanStatus").value("Prestado"));
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertTrue(response.getBody().containsKey("error"));
+        assertEquals("error test", response.getBody().get("error"));
     }
 
     @Test
-    void testCreateLoanFail() throws Exception {
-        // 1. Configurar ObjectMapper
-        ObjectMapper mapper = new ObjectMapper()
-                .registerModule(new JavaTimeModule())
-                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+    void createLoan_ThrowsArticleException_ReturnsBadRequest() {
+        Loan loan = new Loan();
+        loan.setUserId("U-12345");
+        when(loanService.createLoan(loan)).thenThrow(new ArticleException("article error"));
 
-        // 2. Crear un Loan válido (para que no falle en validaciones automáticas)
-        Loan loan1 = new Loan();
-        loan1.setId("loan1");
-        loan1.setArticleIds(List.of(1, 2));
-        loan1.setUserId("user123");
-        loan1.setNameUser("Nombre Usuario");
-        loan1.setUserRole("Estudiante"); // ✔️ Valor permitido por el @Pattern
-        loan1.setLoanDate(LocalDate.now());
-        loan1.setLoanStatus("Prestado");
-        loan1.setLoanDescriptionType("Descripción válida"); // ✔️ Corregido campo
-        loan1.setEquipmentStatus("En buen estado"); // ✔️ Valor permitido
+        ResponseEntity<Map<String, Object>> response = loanController.createLoan(loan);
 
-        // 3. Mockear el servicio para lanzar excepción
-        Mockito.when(loanService.createLoan(any(Loan.class)))
-                .thenThrow(new LoanException("Error al crear préstamo"));
-
-        // 4. Ejecutar prueba
-        mockMvc.perform(post("/loan")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(mapper.writeValueAsString(loan1)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error").value("Error al crear préstamo"));
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals("article error", response.getBody().get("error"));
     }
 
+    // --- deleteLoan ---
 
     @Test
-    void testDeleteLoanSuccess() throws Exception {
-        mockMvc.perform(delete("/loan/loan1"))
-                .andExpect(status().isNoContent());
+    void deleteLoan_Success() {
+        Loan loan = new Loan();
+        loan.setId("LN-123");
+        when(loanService.deleteLoanById("LN-123")).thenReturn(loan);
+
+        ResponseEntity<?> response = loanController.deleteLoan("LN-123");
+
+        assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
+        verify(loanService, times(1)).deleteLoanById("LN-123");
     }
 
     @Test
-    void testDeleteLoanFail() throws Exception {
-        Mockito.doThrow(new LoanException("No se puede eliminar"))
-                .when(loanService).deleteLoanById("loan1");
+    void deleteLoan_LoanException_ReturnsBadRequest() {
+        doThrow(new LoanException("no se puede eliminar")).when(loanService).deleteLoanById("LN-123");
+        ResponseEntity<?> response = loanController.deleteLoan("LN-123");
 
-        mockMvc.perform(delete("/loan/loan1"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error").value("No se puede eliminar"));
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertTrue(((Map<?, ?>)response.getBody()).containsKey("error"));
+        assertEquals("no se puede eliminar", ((Map<?, ?>)response.getBody()).get("error"));
     }
 
     @Test
-    void testGetLoanById() throws Exception {
-        Mockito.when(loanService.getLoanById("loan1")).thenReturn(loan);
+    void deleteLoan_IllegalArgumentException_ReturnsBadRequest() {
+        ResponseEntity<?> response = loanController.deleteLoan("");
 
-        mockMvc.perform(get("/loan?id=loan1"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.loan.id").value("loan1"));
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertTrue(((Map<?, ?>)response.getBody()).containsKey("error"));
+        assertEquals("El ID del préstamo no puede estar vacío", ((Map<?, ?>)response.getBody()).get("error"));
+    }
+
+    // --- getLoans (varios caminos) ---
+
+    @Test
+    void getLoans_ById_Success() {
+        Loan loan = new Loan();
+        loan.setId("LN-1");
+        when(loanService.getLoanById("LN-1")).thenReturn(loan);
+
+        Map<String, Object> result = loanController.getLoans("LN-1", null, null, null, null).getBody();
+
+        assertNotNull(result);
+        assertTrue(result.containsKey("loan"));
+        assertEquals(loan, result.get("loan"));
     }
 
     @Test
-    void testGetLoanByUser() throws Exception {
-        Mockito.when(loanService.getLoansByUserReport("user123")).thenReturn(List.of(loan));
+    void getLoans_ByUser_Success() {
+        Loan l1 = new Loan(); l1.setId("LN-1");
+        Loan l2 = new Loan(); l2.setId("LN-2");
+        List<Loan> loans = Arrays.asList(l1, l2);
 
-        mockMvc.perform(get("/loan?userId=user123"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.loans[0].id").value("loan1"));
+        when(loanService.getLoansByUserReport("U-1")).thenReturn(loans);
+
+        Map<String, Object> result = loanController.getLoans(null, "U-1", null, null, null).getBody();
+
+        assertNotNull(result);
+        assertTrue(result.containsKey("loans"));
+        assertEquals(loans, result.get("loans"));
     }
 
     @Test
-    void testGetLoanByDateRange() throws Exception {
-        Mockito.when(loanService.getLoansByDateRangeAndStatus(any(), any(), any())).thenReturn(List.of(loan));
+    void getLoans_ByDateRangeAndStatus_Success() {
+        Loan l1 = new Loan(); l1.setId("LN-1");
+        List<Loan> loans = Collections.singletonList(l1);
 
-        mockMvc.perform(get("/loan?startDate=2024-05-01&endDate=2024-05-30"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.loans[0].id").value("loan1"));
+        LocalDate start = LocalDate.of(2024, 1, 1);
+        LocalDate end = LocalDate.of(2024, 12, 31);
+        when(loanService.getLoansByDateRangeAndStatus(start, end, "Prestado")).thenReturn(loans);
+
+        Map<String, Object> result = loanController.getLoans(null, null, "Prestado", start, end).getBody();
+
+        assertNotNull(result);
+        assertEquals(loans, result.get("loans"));
     }
 
     @Test
-    void testGetAllLoans() throws Exception {
-        // Configurar el mock para aceptar cualquier String (incluyendo null)
-        Mockito.when(loanService.getLoans(Mockito.nullable(String.class))).thenReturn(List.of(loan));
+    void getLoans_All_Success() {
+        List<Loan> loans = Arrays.asList(new Loan(), new Loan());
+        when(loanService.getLoans("Prestado")).thenReturn(loans);
 
-        mockMvc.perform(get("/loan"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.loans[0].id").value("loan1")); // Asegurar que el JSON path es correcto
+        Map<String, Object> result = loanController.getLoans(null, null, "Prestado", null, null).getBody();
+
+        assertNotNull(result);
+        assertEquals(loans, result.get("loans"));
     }
 
     @Test
-    void testUpdateLoanOnlyLoanFields() throws Exception {
-        mockMvc.perform(patch("/loan/loan1")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(new ObjectMapper().writeValueAsString(Map.of("status", "Devuelto"))))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Préstamo actualizado"));
+    void getLoans_LoanException_ReturnsBadRequest() {
+        when(loanService.getLoans(any())).thenThrow(new LoanException("error get"));
+        ResponseEntity<Map<String, Object>> response = loanController.getLoans(null, null, "X", null, null);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals("error get", response.getBody().get("error"));
     }
 
     @Test
-    void testUpdateLoanWithReturn() throws Exception {
-        mockMvc.perform(patch("/loan/loan1")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(new ObjectMapper().writeValueAsString(Map.of("devolver", true))))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Préstamo devuelto"));
+    void getLoans_IllegalArgumentException_ReturnsBadRequest() {
+        // En este caso necesitamos ambas fechas, pero con una relación inválida
+        LocalDate start = LocalDate.now().plusDays(5); // Fecha futura
+        LocalDate end = LocalDate.now(); // Fecha actual
+
+        ResponseEntity<Map<String, Object>> response = loanController.getLoans(null, null, null, start, end);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertTrue(response.getBody().containsKey("error"));
+    }
+
+    // --- updateLoan ---
+
+    @Test
+    void updateLoan_Devolver_Success() {
+        doNothing().when(loanService).devolverLoan("LN-1");
+
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("devolver", true);
+
+        ResponseEntity<Map<String, Object>> response = loanController.updateLoan("LN-1", updates);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("Préstamo devuelto", response.getBody().get("message"));
+        assertEquals("Todos los artículos actualizados según estado del equipo", response.getBody().get("details"));
     }
 
     @Test
-    void testUpdateLoanWithArticles() throws Exception {
-        mockMvc.perform(patch("/loan/loan1")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(new ObjectMapper().writeValueAsString(Map.of("articulos", Map.of("1", "Dañado")))))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Préstamo actualizado"));
+    void updateLoan_ArticulosYUpdate_Success() {
+        Map<String, Object> updates = new HashMap<>();
+        Map<String, Object> articulos = new HashMap<>();
+        articulos.put("101", "Disponible");
+        updates.put("articulos", articulos);
+        updates.put("equipmentStatus", "Dañado");
+
+        doNothing().when(loanService).updateArticlesStatus(eq("LN-1"), any());
+        doNothing().when(loanService).updateLoan(eq("LN-1"), any());
+
+        ResponseEntity<Map<String, Object>> response = loanController.updateLoan("LN-1", updates);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("Préstamo actualizado", response.getBody().get("message"));
+        assertTrue(response.getBody().containsKey("updated_fields"));
     }
 
     @Test
-    void testUpdateLoanError() throws Exception {
-        Mockito.doThrow(new LoanException("Error actualización")).when(loanService).updateLoan(eq("loan1"), anyMap());
+    void updateLoan_OnlyUpdate_Success() {
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("equipmentStatus", "Dañado");
 
-        mockMvc.perform(patch("/loan/loan1")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(new ObjectMapper().writeValueAsString(Map.of("status", "X"))))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error").value("Error actualización"));
+        doNothing().when(loanService).updateLoan(eq("LN-1"), any());
+
+        ResponseEntity<Map<String, Object>> response = loanController.updateLoan("LN-1", updates);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("Préstamo actualizado", response.getBody().get("message"));
+        assertTrue(response.getBody().containsKey("updated_fields"));
+    }
+
+    @Test
+    void updateLoan_LoanException_ReturnsBadRequest() {
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("equipmentStatus", "Dañado");
+        doThrow(new LoanException("error update")).when(loanService).updateLoan(eq("LN-1"), any());
+
+        ResponseEntity<Map<String, Object>> response = loanController.updateLoan("LN-1", updates);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals("error update", response.getBody().get("error"));
+    }
+
+    @Test
+    void updateLoan_IllegalArgumentException_ReturnsBadRequest() {
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("equipmentStatus", "Dañado");
+
+        ResponseEntity<Map<String, Object>> response = loanController.updateLoan("", updates);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals("El ID del préstamo no puede estar vacío", response.getBody().get("error"));
+    }
+
+    @Test
+    void updateLoan_ClassCastException_ReturnsBadRequest() {
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("articulos", "notAMap");
+
+        ResponseEntity<Map<String, Object>> response = loanController.updateLoan("LN-1", updates);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertTrue(response.getBody().get("error").toString().contains("El campo 'articulos' debe ser un objeto JSON válido"));
+    }
+
+    // --- extractArticulosMap ---
+
+    @Test
+    void extractArticulosMap_Null_ReturnsEmptyMap() throws Exception {
+        Map<String, String> map = invokeExtractArticulosMap(null);
+        assertTrue(map.isEmpty());
+    }
+
+    @Test
+    void extractArticulosMap_Map_Success() throws Exception {
+        Map<String, Object> articulos = new HashMap<>();
+        articulos.put("101", "Disponible");
+        Map<String, String> map = invokeExtractArticulosMap(articulos);
+        assertEquals("Disponible", map.get("101"));
+    }
+
+    @Test
+    void extractArticulosMap_InvalidId_ThrowsException() {
+        Map<String, Object> articulos = new HashMap<>();
+        articulos.put("notANumber", "Disponible");
+
+        Exception exception = assertThrows(Exception.class, () -> {
+            try {
+                invokeExtractArticulosMap(articulos);
+            } catch (InvocationTargetException e) {
+                throw e.getCause();
+            }
+        });
+
+        assertTrue(exception instanceof IllegalArgumentException);
+        assertTrue(exception.getMessage().contains("ID de artículo inválido"));
+    }
+
+    @Test
+    void extractArticulosMap_NotAMap_ThrowsException() {
+        Exception exception = assertThrows(Exception.class, () -> {
+            try {
+                invokeExtractArticulosMap("noMap");
+            } catch (InvocationTargetException e) {
+                throw e.getCause();
+            }
+        });
+
+        assertTrue(exception instanceof IllegalArgumentException);
+        assertTrue(exception.getMessage().contains("El campo 'articulos' debe ser un objeto JSON válido"));
+    }
+    // --- validateUpdatePayload ---
+
+    @Test
+    void validateUpdatePayload_Null_Throws() throws Exception {
+        assertThrows(NullPointerException.class, () -> invokeValidateUpdatePayload(null));
+    }
+
+    @Test
+    void validateUpdatePayload_Empty_Throws() throws Exception {
+        assertThrows(IllegalArgumentException.class, () -> invokeValidateUpdatePayload(new HashMap<>()));
+    }
+
+    // --- validateId ---
+
+    @Test
+    void validateId_NullOrEmpty_Throws() throws Exception {
+        assertThrows(IllegalArgumentException.class, () -> invokeValidateId(null));
+        assertThrows(IllegalArgumentException.class, () -> invokeValidateId(""));
+        assertThrows(IllegalArgumentException.class, () -> invokeValidateId("  "));
+    }
+
+    // --- validateDateRange ---
+
+    @Test
+    void validateDateRange_Null_Throws() throws Exception {
+        LocalDate now = LocalDate.now();
+        assertThrows(IllegalArgumentException.class, () -> invokeValidateDateRange(null, now));
+        assertThrows(IllegalArgumentException.class, () -> invokeValidateDateRange(now, null));
+    }
+
+    @Test
+    void validateDateRange_StartAfterEnd_Throws() throws Exception {
+        LocalDate start = LocalDate.of(2024, 6, 2);
+        LocalDate end = LocalDate.of(2024, 6, 1);
+
+        Exception exception = assertThrows(Exception.class, () -> {
+            try {
+                invokeValidateDateRange(start, end);
+            } catch (InvocationTargetException e) {
+                // Extraer la causa real de la excepción
+                throw e.getCause();
+            }
+        });
+
+        assertTrue(exception instanceof IllegalArgumentException);
+        assertEquals("La fecha de inicio no puede ser posterior a la fecha de fin", exception.getMessage());
+    }
+    // Reflection helpers for private methods
+    private Map<String, String> invokeExtractArticulosMap(Object obj) throws Exception {
+        var method = LoanController.class.getDeclaredMethod("extractArticulosMap", Object.class);
+        method.setAccessible(true);
+        return (Map<String, String>) method.invoke(loanController, obj);
+    }
+
+    private void invokeValidateUpdatePayload(Map<String, Object> map) throws Throwable {
+        var method = LoanController.class.getDeclaredMethod("validateUpdatePayload", Map.class);
+        method.setAccessible(true);
+        try {
+            method.invoke(loanController, map);
+        } catch (InvocationTargetException e) {
+            // Propagar la causa real en lugar de la excepción de reflexión
+            if (e.getCause() != null) {
+                throw e.getCause();
+            }
+            throw e;
+        }
+    }
+
+    private void invokeValidateId(String id) throws Throwable {  // Cambia Exception a Throwable
+        var method = LoanController.class.getDeclaredMethod("validateId", String.class);
+        method.setAccessible(true);
+        try {
+            method.invoke(loanController, id);
+        } catch (InvocationTargetException e) {
+            // Extraer y lanzar la causa raíz
+            throw e.getCause();
+        }
+    }
+
+    private void invokeValidateDateRange(LocalDate start, LocalDate end) throws Throwable {
+        var method = LoanController.class.getDeclaredMethod("validateDateRange", LocalDate.class, LocalDate.class);
+        method.setAccessible(true);
+        try {
+            method.invoke(loanController, start, end);
+        } catch (InvocationTargetException e) {
+            // Extraer y lanzar la causa raíz
+            throw e.getCause();
+        }
     }
 }
