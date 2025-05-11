@@ -9,7 +9,6 @@ import edu.eci.cvds.proyect.coliseum.persistency.repository.ArticleRepository;
 import edu.eci.cvds.proyect.coliseum.persistency.repository.LoanRepository;
 import org.junit.jupiter.api.*;
 import org.mockito.*;
-import org.springframework.dao.EmptyResultDataAccessException;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;

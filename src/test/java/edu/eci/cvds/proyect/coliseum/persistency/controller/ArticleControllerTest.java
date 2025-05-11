@@ -1,7 +1,8 @@
-package edu.eci.cvds.proyect.coliseum.persistency.Controller;
+package edu.eci.cvds.proyect.coliseum.persistency.controller;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.*;
 
 import edu.eci.cvds.proyect.coliseum.persistency.dto.ArticleDto;
@@ -12,7 +13,6 @@ import edu.eci.cvds.proyect.coliseum.persistency.service.ArticleService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -272,6 +272,7 @@ class ArticleControllerTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked") // Supresion segura del cast controlado
     void testGetAllAlerts_Success() {
         // Arrange
         Alert alert = new Alert("id1", "Balon", "Mensaje", LocalDateTime.now());
@@ -282,10 +283,18 @@ class ArticleControllerTest {
 
         // Assert
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        List<Alert> alerts = (List<Alert>) response.getBody();
+
+        Object body = response.getBody();
+        assertNotNull(body);
+        assertTrue(body instanceof List<?>);
+
+        List<Alert> alerts = (List<Alert>) body;
         assertEquals(1, alerts.size());
+        assertEquals("id1", alerts.get(0).getId());
+
         verify(alertRepository, times(1)).findAll();
     }
+
 
     @Test
     void testGetAllAlerts_Exception() {

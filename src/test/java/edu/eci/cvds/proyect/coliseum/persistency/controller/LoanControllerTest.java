@@ -1,4 +1,4 @@
-package edu.eci.cvds.proyect.coliseum.persistency.Controller;
+package edu.eci.cvds.proyect.coliseum.persistency.controller;
 
 import edu.eci.cvds.proyect.coliseum.persistency.Exception.ArticleException;
 import edu.eci.cvds.proyect.coliseum.persistency.Exception.LoanException;
@@ -15,6 +15,8 @@ import java.time.LocalDate;
 import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 class LoanControllerTest {
@@ -43,10 +45,15 @@ class LoanControllerTest {
         ResponseEntity<Map<String, Object>> response = loanController.createLoan(loan);
 
         assertEquals(HttpStatus.CREATED, response.getStatusCode());
-        assertTrue(response.getBody().containsKey("loan"));
-        assertEquals(savedLoan, response.getBody().get("loan"));
+        
+        Map<String, Object> body = response.getBody();
+        assertNotNull(body);
+        assertTrue(body.containsKey("loan"));
+        assertEquals(savedLoan, body.get("loan"));
+        
         verify(loanService, times(1)).createLoan(loan);
     }
+
 
     @Test
     void createLoan_ThrowsLoanException_ReturnsBadRequest() {
@@ -57,8 +64,11 @@ class LoanControllerTest {
         ResponseEntity<Map<String, Object>> response = loanController.createLoan(loan);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        assertTrue(response.getBody().containsKey("error"));
-        assertEquals("error test", response.getBody().get("error"));
+        Map<String, Object> body = response.getBody();
+        assertNotNull(body);
+        assertTrue(body.containsKey("error"));
+        assertEquals("error test", body.get("error"));
+
     }
 
     @Test
@@ -70,7 +80,9 @@ class LoanControllerTest {
         ResponseEntity<Map<String, Object>> response = loanController.createLoan(loan);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        assertEquals("article error", response.getBody().get("error"));
+        Map<String, Object> body = response.getBody();
+        assertNotNull(body);
+        assertEquals("article error", body.get("error"));
     }
 
     // --- deleteLoan ---
@@ -93,8 +105,10 @@ class LoanControllerTest {
         ResponseEntity<?> response = loanController.deleteLoan("LN-123");
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        assertTrue(((Map<?, ?>)response.getBody()).containsKey("error"));
-        assertEquals("no se puede eliminar", ((Map<?, ?>)response.getBody()).get("error"));
+        Map<?, ?> body = (Map<?, ?>) response.getBody();
+        assertNotNull(body);
+        assertTrue(body.containsKey("error"));
+        assertEquals("no se puede eliminar", body.get("error"));
     }
 
     @Test
@@ -102,8 +116,11 @@ class LoanControllerTest {
         ResponseEntity<?> response = loanController.deleteLoan("");
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        assertTrue(((Map<?, ?>)response.getBody()).containsKey("error"));
-        assertEquals("El ID del préstamo no puede estar vacío", ((Map<?, ?>)response.getBody()).get("error"));
+        Map<?, ?> body = (Map<?, ?>) response.getBody();
+        assertNotNull(body);
+        assertTrue(body.containsKey("error"));
+        assertEquals("El ID del préstamo no puede estar vacío", body.get("error"));
+
     }
 
     // --- getLoans (varios caminos) ---
@@ -168,7 +185,9 @@ class LoanControllerTest {
         ResponseEntity<Map<String, Object>> response = loanController.getLoans(null, null, "X", null, null);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        assertEquals("error get", response.getBody().get("error"));
+        Map<String, Object> body = response.getBody();
+        assertNotNull(body);
+        assertEquals("error get", body.get("error"));
     }
 
     @Test
@@ -180,7 +199,9 @@ class LoanControllerTest {
         ResponseEntity<Map<String, Object>> response = loanController.getLoans(null, null, null, start, end);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        assertTrue(response.getBody().containsKey("error"));
+        Map<String, Object> body = response.getBody();
+        assertNotNull(body);
+        assertTrue(body.containsKey("error"));
     }
 
     // --- updateLoan ---
@@ -195,8 +216,10 @@ class LoanControllerTest {
         ResponseEntity<Map<String, Object>> response = loanController.updateLoan("LN-1", updates);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertEquals("Préstamo devuelto", response.getBody().get("message"));
-        assertEquals("Todos los artículos actualizados según estado del equipo", response.getBody().get("details"));
+        Map<String, Object> body = response.getBody();
+        assertNotNull(body);
+        assertEquals("Préstamo devuelto", body.get("message"));
+        assertEquals("Todos los artículos actualizados según estado del equipo", body.get("details"));
     }
 
     @Test
@@ -213,8 +236,10 @@ class LoanControllerTest {
         ResponseEntity<Map<String, Object>> response = loanController.updateLoan("LN-1", updates);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertEquals("Préstamo actualizado", response.getBody().get("message"));
-        assertTrue(response.getBody().containsKey("updated_fields"));
+        Map<String, Object> body = response.getBody();
+        assertNotNull(body);
+        assertEquals("Préstamo actualizado", body.get("message"));
+        assertTrue(body.containsKey("updated_fields"));
     }
 
     @Test
@@ -227,8 +252,10 @@ class LoanControllerTest {
         ResponseEntity<Map<String, Object>> response = loanController.updateLoan("LN-1", updates);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertEquals("Préstamo actualizado", response.getBody().get("message"));
-        assertTrue(response.getBody().containsKey("updated_fields"));
+        Map<String, Object> body = response.getBody();
+        assertNotNull(body);
+        assertEquals("Préstamo actualizado", body.get("message"));
+        assertTrue(body.containsKey("updated_fields"));
     }
 
     @Test
@@ -240,7 +267,9 @@ class LoanControllerTest {
         ResponseEntity<Map<String, Object>> response = loanController.updateLoan("LN-1", updates);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        assertEquals("error update", response.getBody().get("error"));
+        Map<String, Object> body = response.getBody();
+        assertNotNull(body);
+        assertEquals("error update", body.get("error"));
     }
 
     @Test
@@ -251,7 +280,9 @@ class LoanControllerTest {
         ResponseEntity<Map<String, Object>> response = loanController.updateLoan("", updates);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        assertEquals("El ID del préstamo no puede estar vacío", response.getBody().get("error"));
+        Map<String, Object> body = response.getBody();
+        assertNotNull(body);
+        assertEquals("El ID del préstamo no puede estar vacío", body.get("error"));
     }
 
     @Test
@@ -262,7 +293,9 @@ class LoanControllerTest {
         ResponseEntity<Map<String, Object>> response = loanController.updateLoan("LN-1", updates);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        assertTrue(response.getBody().get("error").toString().contains("El campo 'articulos' debe ser un objeto JSON válido"));
+        Map<String, Object> body = response.getBody();
+        assertNotNull(body);
+        assertTrue(body.get("error").toString().contains("El campo 'articulos' debe ser un objeto JSON válido"));
     }
 
     // --- extractArticulosMap ---
@@ -325,24 +358,26 @@ class LoanControllerTest {
 
     // --- validateId ---
 
-    @Test
-    void validateId_NullOrEmpty_Throws() throws Exception {
+    @Test 
+    void validateId_NullOrEmpty_Throws() {
         assertThrows(IllegalArgumentException.class, () -> invokeValidateId(null));
         assertThrows(IllegalArgumentException.class, () -> invokeValidateId(""));
         assertThrows(IllegalArgumentException.class, () -> invokeValidateId("  "));
     }
 
+
     // --- validateDateRange ---
 
-    @Test
-    void validateDateRange_Null_Throws() throws Exception {
+    @Test 
+    void validateDateRange_Null_Throws() {
         LocalDate now = LocalDate.now();
         assertThrows(IllegalArgumentException.class, () -> invokeValidateDateRange(null, now));
         assertThrows(IllegalArgumentException.class, () -> invokeValidateDateRange(now, null));
     }
 
+
     @Test
-    void validateDateRange_StartAfterEnd_Throws() throws Exception {
+    void validateDateRange_StartAfterEnd_Throws()  {
         LocalDate start = LocalDate.of(2024, 6, 2);
         LocalDate end = LocalDate.of(2024, 6, 1);
 
@@ -359,11 +394,13 @@ class LoanControllerTest {
         assertEquals("La fecha de inicio no puede ser posterior a la fecha de fin", exception.getMessage());
     }
     // Reflection helpers for private methods
-    private Map<String, String> invokeExtractArticulosMap(Object obj) throws Exception {
+    @SuppressWarnings("unchecked") 
+    private Map<String, String> invokeExtractArticulosMap(Object obj) throws Exception { 
         var method = LoanController.class.getDeclaredMethod("extractArticulosMap", Object.class);
         method.setAccessible(true);
         return (Map<String, String>) method.invoke(loanController, obj);
     }
+
 
     private void invokeValidateUpdatePayload(Map<String, Object> map) throws Throwable {
         var method = LoanController.class.getDeclaredMethod("validateUpdatePayload", Map.class);

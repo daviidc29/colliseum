@@ -1,4 +1,4 @@
-package edu.eci.cvds.proyect.coliseum.persistency.Controller;
+package edu.eci.cvds.proyect.coliseum.persistency.controller;
 
 import java.util.HashMap;
 import java.util.List;

@@ -1,4 +1,4 @@
-package edu.eci.cvds.proyect.coliseum.persistency.Controller;
+package edu.eci.cvds.proyect.coliseum.persistency.controller;
 
 import edu.eci.cvds.proyect.coliseum.persistency.Exception.ArticleException;
 import edu.eci.cvds.proyect.coliseum.persistency.Exception.LoanException;
@@ -200,7 +200,7 @@ public class LoanController {
         logger.info("Solicitando eliminar préstamo con ID: {}", id);
         try {
             validateId(id);
-            Loan deletedLoan = loanService.deleteLoanById(id);
+            loanService.deleteLoanById(id);
             logger.info("Préstamo eliminado exitosamente: {}", id);
             return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
         } catch (LoanException e) {
