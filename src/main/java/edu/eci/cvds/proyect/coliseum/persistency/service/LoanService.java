@@ -14,11 +14,16 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.*;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 public class LoanService {
+    private static final Logger logger = LoggerFactory.getLogger(LoanService.class);
+
     // Enum para estados de préstamo para mayor seguridad de tipo
     public enum LoanStatus {
         PRESTADO("Prestado"),
@@ -143,7 +148,7 @@ public class LoanService {
 
     @Transactional
     public void devolverLoan(String loanId) {
-        Objects.requireNonNull(loanId, "loanId must not be null");
+        Objects.requireNonNull(loanId, "loan Id must not be null");
 
         Loan loan = getLoanById(loanId);
         loan.setLoanStatus(LoanStatus.DEVUELTO.getValue());
@@ -172,6 +177,9 @@ public class LoanService {
         Objects.requireNonNull(id, "id must not be null");
 
         Loan loan = getLoanById(id);
+        if (loan == null) {
+            throw new LoanException("Error con el préstamo " + id);
+        }
         validateDeletion(loan);
 
         if (LoanStatus.PRESTADO.getValue().equals(loan.getLoanStatus())) {
@@ -199,21 +207,43 @@ public class LoanService {
         Loan loan = getLoanById(id);
 
         if (updates.containsKey("estado")) {
-            handleStatusChange(loan, Objects.toString(updates.get("estado"), ""));
+            Object estadoRaw = updates.get("estado");
+            if (estadoRaw instanceof String estado && !estado.trim().isEmpty()) {
+                handleStatusChange(loan, estado.trim());
+            } else {
+                throw new IllegalArgumentException("El estado proporcionado no es válido.");
+            }
         }
+
 
         updates.forEach((key, value) -> {
             if (value == null) {
                 return; // Ignore null values
             }
 
-            switch (key) {
-                case "observaciones" -> loan.setLoanDescriptionType((String) value);
+           switch (key) {
+                case "observaciones" -> {
+                    if (value instanceof String v) {
+                        loan.setLoanDescriptionType(v);
+                    } else {
+                        throw new IllegalArgumentException("Valor inválido para observaciones");
+                    }
+                }
                 case "fecha_devolucion" -> loan.setDevolutionDate(parseDate(value));
-                case "equipmentStatus" -> loan.setEquipmentStatus((String) value);
-                case "estado", "articulo_estado" -> {} // Ya manejados
-                default -> throw new IllegalArgumentException("Campo no válido: " + key);
+                case "equipmentStatus" -> {
+                    if (value instanceof String v) {
+                        loan.setEquipmentStatus(v);
+                    } else {
+                        throw new IllegalArgumentException("Valor inválido para equipmentStatus");
+                    }
+                }
+                case "estado", "articulo_estado" -> {
+                    // Ya manejado previamente en otro paso del flujo
+                    logger.debug("Campo '{}' ya manejado previamente, se omite.", key);
+                }
+                default -> throw new IllegalArgumentException("Campo no válido: " + key + ". Campos válidos: observaciones, fecha_devolucion, equipmentStatus, estado, articulo_estado");
             }
+
         });
 
         // Actualizar artículos
@@ -252,26 +282,30 @@ public class LoanService {
 
     private void updateSingleArticleStatus(Integer articleId, String newStatus) {
         if (!ArticleStatus.isValid(newStatus)) {
+            logger.warn("Intento de actualizar con estado inválido: {}", newStatus);
             throw new IllegalArgumentException("Estado de artículo inválido: " + newStatus);
         }
 
         Article article = articleRepository.findById(articleId)
-                .orElseThrow(() -> new LoanException.LoanExceptionStateError("Artículo no encontrado: " + articleId));
+                .orElseThrow(() -> new IllegalStateException("Artículo no encontrado: " + articleId));
+
         article.setArticleStatus(newStatus);
         articleRepository.save(article);
     }
 
     private void handleStatusChange(Loan loan, String newStatus) {
         if (!LoanStatus.isValid(newStatus)) {
+            logger.warn("Estado de préstamo inválido recibido: {}", newStatus);
             throw new IllegalArgumentException("Estado de préstamo inválido: " + newStatus);
         }
 
-        if (LoanStatus.DEVUELTO.getValue().equals(newStatus)) {
-            devolverLoan(loan.getId());
-        } else if (LoanStatus.VENCIDO.getValue().equals(newStatus)) {
-            markAsVencido(loan);
+        switch (newStatus) {
+            case "Devuelto" -> devolverLoan(loan.getId());
+            case "Vencido" -> markAsVencido(loan);
+            default -> logger.info("Estado de préstamo cambiado a '{}'. No requiere acción adicional.", newStatus);
         }
     }
+
 
     // Método para recordatorios 24h antes de fecha límite
     @Scheduled(cron = "0 0 9 * * *") // Ejecuta diario a las 9:00 AM
@@ -307,7 +341,7 @@ public class LoanService {
         prestamosVencidos.forEach(this::markAsVencido);
     }
 
-    @Transactional
+   @Transactional
     public void markAsVencido(Loan loan) {
         Objects.requireNonNull(loan, "loan must not be null");
 
@@ -315,31 +349,38 @@ public class LoanService {
         updateArticlesStatus(loan.getArticleIds(), ArticleStatus.DISPONIBLE.getValue());
         loanRepository.save(loan);
 
-        // Nueva alerta por estado vencido
-        Alert alerta = new Alert(
+        alertRepository.save(new Alert(
                 null,
                 loan.getUserId(),
-                "Préstamo marcado como vencido: " + loan.getId(),
+                String.format("Préstamo marcado como vencido: %s", loan.getId()),
                 LocalDateTime.now()
-        );
-        alertRepository.save(alerta);
+        ));
     }
 
-    LocalDate parseDate(Object dateValue) {
+    private LocalDate parseDate(Object dateValue) {
         if (dateValue == null) {
-            throw new IllegalArgumentException("Fecha no puede ser null");
+            throw new IllegalArgumentException("La fecha no puede ser null");
         }
 
-        if (dateValue instanceof String) {
-            return LocalDate.parse((String) dateValue);
-        } else if (dateValue instanceof LocalDate) {
-            return (LocalDate) dateValue;
+        if (dateValue instanceof String stringDate) {
+            try {
+                return LocalDate.parse(stringDate);
+            } catch (DateTimeParseException e) {
+                throw new IllegalArgumentException("Formato de fecha inválido: " + stringDate, e);
+            }
         }
-        throw new IllegalArgumentException("Formato de fecha inválido: " + dateValue.getClass().getName());
+
+        if (dateValue instanceof LocalDate localDate) {
+            return localDate;
+        }
+
+        throw new IllegalArgumentException("Tipo de fecha inválido: " + dateValue.getClass().getSimpleName());
     }
+
 
     private void updateArticlesStatus(List<Integer> articleIds, String newStatus) {
         if (articleIds == null || articleIds.isEmpty()) {
+            logger.warn("Intento de actualizar estado con lista de artículos vacía o nula.");
             return;
         }
 
@@ -348,9 +389,10 @@ public class LoanService {
         articleRepository.saveAll(articles);
     }
 
+
     // Métodos de consulta
     public List<Loan> getLoans(String status) {
-        if (status == null || status.isEmpty()) {
+        if (status == null || status.isBlank()) {
             return loanRepository.findAll();
         }
 
@@ -358,7 +400,10 @@ public class LoanService {
             case "Prestado" -> loanRepository.findByLoanStatus(LoanStatus.PRESTADO.getValue());
             case "Vencido" -> loanRepository.findByLoanStatus(LoanStatus.VENCIDO.getValue());
             case "Devuelto" -> loanRepository.findByLoanStatus(LoanStatus.DEVUELTO.getValue());
-            default -> loanRepository.findAll();
+            default -> {
+                logger.warn("Estado desconocido '{}' en consulta de préstamos. Se retornan todos.", status);
+                yield loanRepository.findAll();
+            }
         };
     }
 

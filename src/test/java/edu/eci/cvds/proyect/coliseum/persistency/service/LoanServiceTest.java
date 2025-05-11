@@ -50,7 +50,7 @@ class LoanServiceTest {
                 .nameUser("Juan")
                 .userId("user1")
                 .userRole("Estudiante")
-                .LoanDescriptionType("Libro")
+                .loanDescriptionType("Libro")
                 .creationDate(LocalDateTime.now())
                 .loanDate(LocalDate.now())
                 .devolutionDate(LocalDate.now().plusDays(2))
@@ -86,7 +86,7 @@ class LoanServiceTest {
 
         Loan loan = Loan.builder().articleIds(articleIds).loanStatus("Prestado")
                 .nameUser("Juan").userId("user1").userRole("Estudiante")
-                .LoanDescriptionType("Libro").equipmentStatus("En buen estado")
+                .loanDescriptionType("Libro").equipmentStatus("En buen estado")
                 .build();
 
         LoanException.LoanExceptionBookIsAvailable ex = assertThrows(
@@ -102,7 +102,7 @@ class LoanServiceTest {
 
         Loan loan = Loan.builder().articleIds(articleIds).loanStatus("Prestado")
                 .nameUser("Juan").userId("user1").userRole("Estudiante")
-                .LoanDescriptionType("Libro").equipmentStatus("En buen estado")
+                .loanDescriptionType("Libro").equipmentStatus("En buen estado")
                 .build();
 
         LoanException.LoanExceptionStateError ex = assertThrows(
@@ -118,7 +118,7 @@ class LoanServiceTest {
                 .articleIds(articleIds)
                 .loanStatus("Prestado")
                 .nameUser("Juan").userId("user1").userRole("Estudiante")
-                .LoanDescriptionType("Libro").equipmentStatus("En buen estado")
+                .loanDescriptionType("Libro").equipmentStatus("En buen estado")
                 .loanDate(LocalDate.of(2025, 5, 10))
                 .devolutionDate(LocalDate.of(2025, 5, 1))
                 .build();
@@ -143,7 +143,7 @@ class LoanServiceTest {
                 .articleIds(articleIds)
                 .loanStatus("Prestado")
                 .nameUser("Juan").userId("user1").userRole("Estudiante")
-                .LoanDescriptionType("Libro").equipmentStatus("En buen estado")
+                .loanDescriptionType("Libro").equipmentStatus("En buen estado")
                 .loanDate(LocalDate.now())
                 .devolutionDate(LocalDate.now().minusDays(1))
                 .build();
@@ -168,7 +168,7 @@ class LoanServiceTest {
                 .articleIds(articleIds)
                 .loanStatus("Inexistente")
                 .nameUser("Juan").userId("user1").userRole("Estudiante")
-                .LoanDescriptionType("Libro").equipmentStatus("En buen estado")
+                .loanDescriptionType("Libro").equipmentStatus("En buen estado")
                 .build();
 
         when(articleRepository.findAllById(articleIds)).thenReturn(
@@ -336,7 +336,7 @@ class LoanServiceTest {
                 .nameUser("Test User")
                 .userId("user1")
                 .userRole("Estudiante")
-                .LoanDescriptionType("Libro")
+                .loanDescriptionType("Libro")
                 .loanStatus("Prestado")
                 .equipmentStatus("En buen estado")
                 .build();

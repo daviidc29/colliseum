@@ -42,7 +42,7 @@ public class Loan {
 
     @NotBlank(message="La descripcion y tipo de prestamo no puede estar vacías")
     @Size(max=500,message="La descripcion y tipo de prestamo no puede tener mas de 500 caracteres")
-    private String LoanDescriptionType;
+    private String loanDescriptionType;
 
     @CreatedDate
     private LocalDateTime creationDate;
@@ -56,7 +56,7 @@ public class Loan {
     private String loanStatus;
 
     @NotBlank(message="El estado del equipo prestado no puede estar vacío")
-    @Pattern(regexp="En buen estado|Dañado| Requiere mantenimiento",message = "El estado del equipo prestado no es valido")
+    @Pattern(regexp="En buen estado|Dañado|Requiere mantenimiento",message = "El estado del equipo prestado no es valido")
     private String equipmentStatus;
 
     @Size(max=500,message="El motivo de la devolucion no puede tener mas de 500 caracteres")
