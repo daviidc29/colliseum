@@ -10,7 +10,6 @@ import org.springframework.stereotype.Service;
 import edu.eci.cvds.proyect.coliseum.persistency.dto.ArticleDto;
 import edu.eci.cvds.proyect.coliseum.persistency.entity.Alert;
 import edu.eci.cvds.proyect.coliseum.persistency.entity.Article;
-import edu.eci.cvds.proyect.coliseum.persistency.exception.ArticleException;
 import edu.eci.cvds.proyect.coliseum.persistency.repository.AlertRepository;
 import edu.eci.cvds.proyect.coliseum.persistency.repository.ArticleRepository;
 
@@ -21,8 +20,7 @@ public class ArticleService {
     private AlertRepository alertRepository;
     private static final String ARTICLE_ID_NULL = "El ID del articulo no puede ser null";
     private static final String ARTICLE_ID_NOT_FOUND = "Articulo no encontrado con ID: ";
-    private static final String ARTICLE_NOT_FOUND_MESSAGE = "Nombre del artículo no encontrado: ";
-
+    
     public ArticleService(ArticleRepository articleRepository, AlertRepository alertRepository) {
         this.articleRepository = articleRepository;
         this.alertRepository = alertRepository;
@@ -40,12 +38,12 @@ public class ArticleService {
         return articleRepository.findById(id).orElseThrow(() -> new RuntimeException(ARTICLE_ID_NOT_FOUND + id));
     }
 
-    public List<Article> getArticlesNames(String name) { 
+    public List<Article> getArticlesNames(String name) {
         if (name == null) {
             throw new IllegalArgumentException("Nombre del artículo no puede ser nulo");
         }
         return articleRepository.findByName(name)
-                .orElseThrow(() -> new RuntimeException(ARTICLE_NOT_FOUND_MESSAGE + name));
+                .orElseThrow(() -> new RuntimeException("Nombre del artículo no encontrado: " + name));
     }
     
     public List<Article> getArticlesStatus(String articleStatus) {
@@ -57,21 +55,20 @@ public class ArticleService {
     }
     
 
-    public Article save(ArticleDto articleDto) { 
+    public Article save(ArticleDto articleDto){
         if (articleDto == null) {
-            throw new ArticleException("El artículo no puede ser nulo");
+            throw new RuntimeException("El articulo no puede ser nulo");
         }
         Integer id = autoIncrement();
         String defaultImage = "/images/" + articleDto.getName().toLowerCase().replaceAll("\\s+", "_") + ".png";
-        
-        Article article = new Article(id, articleDto.getName(), articleDto.getArticleStatus(), articleDto.getDescription(), defaultImage);
+    
+        Article article = new Article(id, articleDto.getName(), articleDto.getArticleStatus(),articleDto.getDescription(), defaultImage);
         Article saved = articleRepository.save(article);
-        
+    
         checkStockAndAlert(articleDto.getName());
         checkStatusAndAlert(article); 
         return saved;
     }
-
     
     public Article update(Integer id, ArticleDto articleDto){
         if (id == null) {
@@ -136,7 +133,7 @@ public class ArticleService {
     }
     public void checkStockAndAlert(String name) {
         long count = articleRepository.findByName(name)
-            .orElseThrow(() -> new RuntimeException(ARTICLE_NOT_FOUND_MESSAGE + name))
+            .orElseThrow(() -> new RuntimeException("Nombre del artículo no encontrado: " + name))
             .stream()
             .filter(a -> a.getArticleStatus().equals("Disponible"))
             .count();
@@ -159,7 +156,7 @@ public class ArticleService {
 
     public long getAvailableCountByName(String name) {
         return articleRepository.findByName(name)
-            .orElseThrow(() -> new RuntimeException(ARTICLE_NOT_FOUND_MESSAGE + name))
+            .orElseThrow(() -> new RuntimeException("Nombre del artículo no encontrado: " + name))
             .stream()
             .filter(a -> a.getArticleStatus().equals("Disponible"))
             .count();

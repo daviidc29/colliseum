@@ -1,8 +1,8 @@
 package edu.eci.cvds.proyect.coliseum.persistency.controller;
 
-import edu.eci.cvds.proyect.coliseum.persistency.entity.Loan;
 import edu.eci.cvds.proyect.coliseum.persistency.exception.ArticleException;
 import edu.eci.cvds.proyect.coliseum.persistency.exception.LoanException;
+import edu.eci.cvds.proyect.coliseum.persistency.entity.Loan;
 import edu.eci.cvds.proyect.coliseum.persistency.service.LoanService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 
+import org.apache.commons.lang3.StringEscapeUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -195,37 +196,31 @@ public class LoanController {
                     )
             }
     )
-        
     public ResponseEntity<?> deleteLoan(
             @Parameter(description = "ID del préstamo a eliminar", required = true)
             @PathVariable String id) {
         
-        // Evitar registrar directamente el ID proveniente del usuario
+        // Validación de entrada
         try {
             validateId(id);
-            logger.info("Solicitando eliminar préstamo con ID proporcionado.");
         } catch (IllegalArgumentException e) {
-            // Solo loguear el tipo de error, no los datos del usuario
-            logger.warn("ID de préstamo inválido recibido.");
+            logger.warn("ID de préstamo inválido recibido: {}", StringEscapeUtils.escapeJava(id));
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Collections.singletonMap(ERROR_KEY, "ID de préstamo inválido"));
         }
 
+        logger.info("Solicitando eliminar préstamo con ID: {}", StringEscapeUtils.escapeJava(id));
+
         try {
             loanService.deleteLoanById(id);
-            // Evitar registrar el ID directamente en los logs
-            logger.info("Préstamo eliminado exitosamente.");
+            logger.info("Préstamo eliminado exitosamente con ID: {}", StringEscapeUtils.escapeJava(id));
             return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
         } catch (LoanException e) {
-            // No registrar el ID directamente, solo el tipo de error
-            logger.error("Error al eliminar préstamo: {}", e.getMessage());
+            logger.error("Error de negocio al eliminar préstamo {}: {}", StringEscapeUtils.escapeJava(id), e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Collections.singletonMap(ERROR_KEY, e.getMessage()));
         }
     }
-
-
-
     // Endpoint GET unificado
     @GetMapping
     @Operation(
@@ -310,14 +305,16 @@ public class LoanController {
                     )
             }
     )
-    public ResponseEntity<Map<String, Object>> getLoans( 
-        @Parameter(description = "ID del préstamo") @RequestParam(required = false) String id,
-        @Parameter(description = "ID del usuario") @RequestParam(required = false) String userId,
-        @Parameter(description = "Estado del préstamo") @RequestParam(required = false) String status,
-        @Parameter(description = "Fecha de inicio") @RequestParam(required = false) LocalDate startDate,
-        @Parameter(description = "Fecha de fin") @RequestParam(required = false) LocalDate endDate) {
+    public ResponseEntity<Map<String, Object>> getLoans(
+            @Parameter(description = "ID del préstamo") @RequestParam(required = false) String id,
+            @Parameter(description = "ID del usuario") @RequestParam(required = false) String userId,
+            @Parameter(description = "Estado del préstamo") @RequestParam(required = false) String status,
+            @Parameter(description = "Fecha de inicio") @RequestParam(required = false) LocalDate startDate,
+            @Parameter(description = "Fecha de fin") @RequestParam(required = false) LocalDate endDate) {
 
-        // Evitar registrar datos controlados por el usuario en los logs
+        logger.info("Buscando préstamos con filtros: id={}, userId={}, status={}, startDate={}, endDate={}",
+                id, userId, status, startDate, endDate);
+
         try {
             if (id != null && !id.trim().isEmpty()) {
                 validateId(id);
@@ -335,12 +332,10 @@ public class LoanController {
 
             return handleGetAll(status);
         } catch (LoanException e) {
-            // Log error sin incluir datos controlados por el usuario
             logger.error("Error al buscar préstamos: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Collections.singletonMap(ERROR_KEY, e.getMessage()));
         } catch (IllegalArgumentException e) {
-            // Log error sin incluir datos controlados por el usuario
             logger.error("Error de validación: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Collections.singletonMap(ERROR_KEY, e.getMessage()));
@@ -363,51 +358,28 @@ public class LoanController {
     }
 
     private ResponseEntity<Map<String, Object>> handleGetById(String id) {
-        try {
-            Loan loan = loanService.getLoanById(id);
-            logger.info("Préstamo encontrado con ID: {}", "***ID SENSIBLE***"); // No registrar el ID real
-            return ResponseEntity.ok(Collections.singletonMap(LOAN_KEY, loan));
-        } catch (LoanException e) {
-            logger.error("Error al obtener préstamo con ID: {}", "***ID SENSIBLE***"); // No registrar el ID real
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(Collections.singletonMap(ERROR_KEY, e.getMessage()));
-        }
+        Loan loan = loanService.getLoanById(id);
+        logger.info("Préstamo encontrado con ID: {}", id);
+        return ResponseEntity.ok(Collections.singletonMap(LOAN_KEY, loan));
     }
 
     private ResponseEntity<Map<String, Object>> handleGetByUser(String userId) {
-        try {
-            List<Loan> loans = loanService.getLoansByUserReport(userId);
-            logger.info("Encontrados {} préstamos para usuario.", loans.size()); // No registrar el userId real
-            return ResponseEntity.ok(Collections.singletonMap(LOANS_KEY, loans));
-        } catch (LoanException e) {
-            logger.error("Error al obtener préstamos para el usuario.");
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(Collections.singletonMap(ERROR_KEY, e.getMessage()));
-        }
+        List<Loan> loans = loanService.getLoansByUserReport(userId);
+        logger.info("Encontrados {} préstamos para usuario: {}", loans.size(), userId);
+        return ResponseEntity.ok(Collections.singletonMap(LOANS_KEY, loans));
     }
 
     private ResponseEntity<Map<String, Object>> handleGetByDateRange(LocalDate start, LocalDate end, String status) {
-        try {
-            List<Loan> loans = loanService.getLoansByDateRangeAndStatus(start, end, status);
-            logger.info("Encontrados {} préstamos en rango de fechas, estado: {}", loans.size(), "***Estado SENSIBLE***"); // No registrar el rango de fechas real ni estado
-            return ResponseEntity.ok(Collections.singletonMap(LOANS_KEY, loans));
-        } catch (LoanException e) {
-            logger.error("Error al obtener préstamos en el rango de fechas.");
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(Collections.singletonMap(ERROR_KEY, e.getMessage()));
-        }
+        List<Loan> loans = loanService.getLoansByDateRangeAndStatus(start, end, status);
+        logger.info("Encontrados {} préstamos en rango de fechas: {} - {}, estado: {}",
+                loans.size(), start, end, status);
+        return ResponseEntity.ok(Collections.singletonMap(LOANS_KEY, loans));
     }
 
     private ResponseEntity<Map<String, Object>> handleGetAll(String status) {
-        try {
-            List<Loan> loans = loanService.getLoans(status);
-            logger.info("Recuperados {} préstamos con estado.", loans.size()); // No registrar el estado real
-            return ResponseEntity.ok(Collections.singletonMap(LOANS_KEY, loans));
-        } catch (LoanException e) {
-            logger.error("Error al obtener préstamos con estado.");
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(Collections.singletonMap(ERROR_KEY, e.getMessage()));
-        }
+        List<Loan> loans = loanService.getLoans(status);
+        logger.info("Recuperados {} préstamos con estado: {}", loans.size(), status);
+        return ResponseEntity.ok(Collections.singletonMap(LOANS_KEY, loans));
     }
 
     @PatchMapping("/{id}")
@@ -480,14 +452,11 @@ public class LoanController {
             }
     )
     public ResponseEntity<Map<String, Object>> updateLoan(
-        @PathVariable String id,
-        @RequestBody Map<String, Object> updates) {
+            @PathVariable String id,
+            @RequestBody Map<String, Object> updates) {
 
+        logger.info("Actualizando préstamo con ID: {}, campos: {}", id, updates.keySet());
         try {
-            // Registra un mensaje genérico, no los valores reales
-            logger.info("Actualizando préstamo con ID: {}", "***ID SENSIBLE***"); // No registrar el ID real
-            logger.debug("Campos a actualizar: {}", updates.keySet()); // Cambiar info por debug para evitar la exposición en producción
-
             validateId(id);
             validateUpdatePayload(updates);
 
@@ -521,15 +490,15 @@ public class LoanController {
                 response.put(UPDATED_FIELDS_KEY, updates.keySet());
             }
 
-            logger.info("Préstamo actualizado exitosamente: {}", "***ID SENSIBLE***"); // No registrar el ID real
+            logger.info("Préstamo {} actualizado exitosamente", id);
             return ResponseEntity.ok().body(response);
 
         } catch (LoanException | IllegalArgumentException e) {
-            logger.error("Error al actualizar préstamo con ID: {}", "***ID SENSIBLE***"); // No registrar el ID real
+            logger.error("Error al actualizar préstamo {}: {}", id, e.getMessage());
             return ResponseEntity.badRequest()
                     .body(Collections.singletonMap(ERROR_KEY, e.getMessage()));
         } catch (ClassCastException e) {
-            logger.error("Error de formato en la actualización del préstamo con ID: {}", "***ID SENSIBLE***"); // No registrar el ID real
+            logger.error("Error de formato en la actualización del préstamo {}: {}", id, e.getMessage());
             return ResponseEntity.badRequest()
                     .body(Collections.singletonMap(ERROR_KEY, "Formato inválido en los datos de actualización: " + e.getMessage()));
         }
