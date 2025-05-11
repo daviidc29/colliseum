@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.*;
 
-import edu.eci.cvds.proyect.coliseum.persistency.Controller.ArticleController;
 import edu.eci.cvds.proyect.coliseum.persistency.dto.ArticleDto;
 import edu.eci.cvds.proyect.coliseum.persistency.entity.Alert;
 import edu.eci.cvds.proyect.coliseum.persistency.entity.Article;
