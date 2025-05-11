@@ -28,7 +28,9 @@ public class LoanService {
     public static final String DEVUELTO_STATUS = "Devuelto";
     public static final String ID_NULL = "ID no deberia ser nulo";
     public static final String STATUS = "estado";
+    public static final String ARTICLE_STATUS = "articulo_estado";
 
+    
 
 
     // Enum para estados de préstamo para mayor seguridad de tipo
@@ -247,7 +249,7 @@ public class LoanService {
                 case "observaciones" -> handleObservacionesUpdate(loan, value);
                 case "fecha_devolucion" -> loan.setDevolutionDate(parseDate(value));
                 case "equipmentStatus" -> handleEquipmentStatusUpdate(loan, value);
-                case STATUS, "articulo_estado" -> logger.debug("Campo '{}' ya manejado previamente, se omite.", key);
+                case STATUS, ARTICLE_STATUS -> logger.debug("Campo '{}' ya manejado previamente, se omite.", key);
                 default -> throw new IllegalArgumentException("Campo no válido: " + key + ". Campos válidos: observaciones, fecha_devolucion, equipmentStatus, estado, articulo_estado");
             }
         });
@@ -277,8 +279,8 @@ public class LoanService {
     }
 
     private void updateArticleStatesIfNeeded(Loan loan, Map<String, Object> updates) {
-        if (updates.containsKey("articulo_estado")) {
-            updateArticleStatesFromMap(loan, updates.get("articulo_estado"));
+        if (updates.containsKey(ARTICLE_STATUS)) {
+            updateArticleStatesFromMap(loan, updates.get(ARTICLE_STATUS));
         }
     }
 
@@ -423,7 +425,7 @@ public class LoanService {
             case VENCIDO_STATUS -> loanRepository.findByLoanStatus(LoanStatus.VENCIDO.getValue());
             case DEVUELTO_STATUS -> loanRepository.findByLoanStatus(LoanStatus.DEVUELTO.getValue());
             default -> {
-                logger.warn("Estado desconocido '{}' en consulta de préstamos. Se retornan todos.", status);
+                logger.warn("Estado desconocido recibido en consulta de préstamos. Se retornan todos.");
                 yield loanRepository.findAll();
             }
         };
