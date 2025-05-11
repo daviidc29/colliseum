@@ -15,8 +15,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Data               // Genera getters, setters, toString, equals y hashCode
-@Getter
-@Setter
 @NoArgsConstructor  // Constructor sin argumentos
 @AllArgsConstructor // Constructor con todos los campos
 @Builder
@@ -56,7 +54,7 @@ public class Loan {
     private String loanStatus;
 
     @NotBlank(message="El estado del equipo prestado no puede estar vacío")
-    @Pattern(regexp="En buen estado|Dañado|Requiere mantenimiento",message = "El estado del equipo prestado no es valido")
+    @Pattern(regexp="En buen estado|Danado|Requiere mantenimiento",message = "El estado del equipo prestado no es valido")
     private String equipmentStatus;
 
     @Size(max=500,message="El motivo de la devolucion no puede tener mas de 500 caracteres")

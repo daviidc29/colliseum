@@ -12,8 +12,6 @@ import org.springframework.data.mongodb.core.mapping.Document;
 
 
 @Data               // Genera getters, setters, toString, equals y hashCode
-@Getter
-@Setter
 @NoArgsConstructor  // Constructor sin argumentos
 @AllArgsConstructor // Constructor con todos los campos
 @Builder
