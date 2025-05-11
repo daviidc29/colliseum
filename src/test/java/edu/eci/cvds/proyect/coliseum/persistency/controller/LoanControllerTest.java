@@ -1,7 +1,7 @@
 package edu.eci.cvds.proyect.coliseum.persistency.controller;
 
-import edu.eci.cvds.proyect.coliseum.persistency.Exception.ArticleException;
-import edu.eci.cvds.proyect.coliseum.persistency.Exception.LoanException;
+import edu.eci.cvds.proyect.coliseum.persistency.exception.ArticleException;
+import edu.eci.cvds.proyect.coliseum.persistency.exception.LoanException;
 import edu.eci.cvds.proyect.coliseum.persistency.entity.Loan;
 import edu.eci.cvds.proyect.coliseum.persistency.service.LoanService;
 import org.junit.jupiter.api.BeforeEach;
