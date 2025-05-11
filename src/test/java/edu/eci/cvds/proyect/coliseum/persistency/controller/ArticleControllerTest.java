@@ -1,234 +1,305 @@
 package edu.eci.cvds.proyect.coliseum.persistency.Controller;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.Mockito.*;
 
 import edu.eci.cvds.proyect.coliseum.persistency.dto.ArticleDto;
+import edu.eci.cvds.proyect.coliseum.persistency.entity.Alert;
 import edu.eci.cvds.proyect.coliseum.persistency.entity.Article;
 import edu.eci.cvds.proyect.coliseum.persistency.repository.AlertRepository;
 import edu.eci.cvds.proyect.coliseum.persistency.service.ArticleService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MockMvc;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
+import java.time.LocalDateTime;
+import java.util.*;
 
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
-
-@WebMvcTest(ArticleController.class)
+@ExtendWith(MockitoExtension.class)
 class ArticleControllerTest {
 
-    @Autowired
-    private MockMvc mockMvc;
-
-    @MockBean
+    @Mock
     private ArticleService articleService;
 
-    @MockBean
+    @Mock
     private AlertRepository alertRepository;
 
-    private ObjectMapper objectMapper = new ObjectMapper();
+    @InjectMocks
+    private ArticleController articleController;
 
-    // Pruebas para getArticles
-    @Test
-    void testGetAllArticlesSuccess() throws Exception {
-        List<Article> articles = Arrays.asList(new Article(1, "Laptop", "Disponible", "Desc", "img.png"));
-        Mockito.when(articleService.getAll()).thenReturn(articles);
-
-        mockMvc.perform(get("/Article"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.cantidad").value(1))
-                .andExpect(jsonPath("$.articulos[0].name").value("Laptop"));
+    @BeforeEach
+    void setup() {
+        MockitoAnnotations.openMocks(this);
     }
 
     @Test
-    void testGetArticlesByIdSuccess() throws Exception {
-        Article article = new Article(1, "Laptop", "Disponible", "Desc", "img.png");
-        Mockito.when(articleService.getOne(1)).thenReturn(article);
-
-        mockMvc.perform(get("/Article?q=1"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.cantidad").value(1))
-                .andExpect(jsonPath("$.articulos[0].id").value(1));
-    }
-
-    @Test
-    void testGetArticlesByDisponiblesSuccess() throws Exception {
-        List<Article> articles = Arrays.asList(new Article(1, "Laptop", "Disponible", "Desc", "img.png"));
-        Mockito.when(articleService.getArticlesNames("Laptop")).thenReturn(articles);
-
-        mockMvc.perform(get("/Article?q=disponibles:Laptop"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.cantidad").value(1))
-                .andExpect(jsonPath("$.articulos[0].articleStatus").value("Disponible"));
-    }
-
-    @Test
-    void testGetArticlesInternalError() throws Exception {
-        Mockito.when(articleService.getAll()).thenThrow(new RuntimeException("DB Error"));
-
-        mockMvc.perform(get("/Article"))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.error").value("Error al obtener artículos"));
-    }
-    // Pruebas para consultar por estado
-
-    @Test
-    void testGetArticlesByStatusSuccess() throws Exception {
+    void testGetArticles_NoQuery() {
+        // Arrange
         List<Article> articles = Arrays.asList(
-            new Article(1, "Laptop", "Disponible", "Descripción", "img.png"),
-            new Article(2, "Mouse", "Disponible", "Descripción", "img.png")
+                new Article(1, "Balon", "Disponible", "Desc1", "/images/balon.png"),
+                new Article(2, "Raqueta", "Disponible", "Desc2", "/images/raqueta.png")
         );
-        Mockito.when(articleService.getArticlesStatus("Disponible")).thenReturn(articles);
+        when(articleService.getAll()).thenReturn(articles);
 
-        mockMvc.perform(get("/Article?q=Disponible"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.cantidad").value(2))
-                .andExpect(jsonPath("$.articulos[0].articleStatus").value("Disponible"));
+        // Act
+        ResponseEntity<?> response = articleController.getArticles(null);
+
+        // Assert
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        Map<?, ?> body = (Map<?, ?>) response.getBody();
+        assertNotNull(body);
+        assertEquals(2, body.get("cantidad"));
+        verify(articleService, times(1)).getAll();
     }
 
     @Test
-    void testGetArticlesByStatusFailure() throws Exception {
-        Mockito.when(articleService.getArticlesStatus("Disponible"))
-                .thenThrow(new RuntimeException("Error de base de datos"));
+    void testGetArticles_NumericQuery() {
+        // Arrange
+        String q = "1";
+        Article article = new Article(1, "Balon", "Disponible", "Desc1", "/images/balon.png");
+        when(articleService.getOne(1)).thenReturn(article);
 
-        mockMvc.perform(get("/Article?q=Disponible"))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.error").value("Error al obtener artículos"));
-    }
+        // Act
+        ResponseEntity<?> response = articleController.getArticles(q);
 
-    // Pruebas para consultar por nombre
-    @Test
-    void testGetArticlesByNameSuccess() throws Exception {
-        List<Article> articles = Arrays.asList(
-            new Article(1, "Laptop", "Disponible", "Descripción", "img.png"),
-            new Article(3, "Laptop", "Prestado", "Descripción", "img.png")
-        );
-        Mockito.when(articleService.getArticlesNames("Laptop")).thenReturn(articles);
-
-        mockMvc.perform(get("/Article?q=Laptop"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.cantidad").value(2))
-                .andExpect(jsonPath("$.articulos[0].name").value("Laptop"));
+        // Assert
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        Map<?, ?> body = (Map<?, ?>) response.getBody();
+        assertNotNull(body);
+        List<?> resultList = (List<?>) body.get("articulos");
+        assertEquals(1, resultList.size());
+        verify(articleService, times(1)).getOne(1);
     }
 
     @Test
-    void testGetArticlesByNameFailure() throws Exception {
-        Mockito.when(articleService.getArticlesNames("Teclado"))
-                .thenThrow(new RuntimeException("Artículo no encontrado"));
+    void testGetArticles_DisponiblesQuery() {
+        // Arrange
+        String q = "disponibles:Balon";
+        Article art1 = new Article(1, "Balon", "Disponible", "Desc1", "/images/balon.png");
+        Article art2 = new Article(2, "Balon", "Dañado", "Desc2", "/images/balon2.png");
+        when(articleService.getArticlesNames("Balon")).thenReturn(Arrays.asList(art1, art2));
 
-        mockMvc.perform(get("/Article?q=Teclado"))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.error").value("Error al obtener artículos"));
-    }
+        // Act
+        ResponseEntity<?> response = articleController.getArticles(q);
 
-    // Prueba para estado inválido (debe buscar por nombre)
-    @Test
-    void testGetArticlesByInvalidStatus() throws Exception {
-        List<Article> articles = Arrays.asList(
-            new Article(4, "Roto", "Dañado", "Descripción", "img.png")
-        );
-        Mockito.when(articleService.getArticlesNames("Roto")).thenReturn(articles);
-
-        mockMvc.perform(get("/Article?q=Roto")) // "Roto" no es un estado válido
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.articulos[0].name").value("Roto"));
-    }
-
-    // Pruebas para save
-    @Test
-    void testSaveArticleSuccess() throws Exception {
-        ArticleDto dto = new ArticleDto("Laptop", "Disponible", "Desc", null);
-        Article saved = new Article(1, "Laptop", "Disponible", "Desc", "/images/laptop.png");
-        Mockito.when(articleService.save(Mockito.any(ArticleDto.class))).thenReturn(saved);
-
-        mockMvc.perform(post("/Article")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(dto)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.id").value(1));
+        // Assert
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        Map<?, ?> body = (Map<?, ?>) response.getBody();
+        assertNotNull(body);
+        List<?> resultList = (List<?>) body.get("articulos");
+        // Filtering in the code leaves only "Disponible"
+        assertEquals(1, resultList.size());
+        verify(articleService, times(1)).getArticlesNames("Balon");
     }
 
     @Test
-    void testSaveArticleFailure() throws Exception {
-        ArticleDto dto = new ArticleDto("Laptop", "Disponible", "Desc", null);
-        Mockito.when(articleService.save(Mockito.any())).thenThrow(new RuntimeException("Error guardando"));
+    void testGetArticles_StatusQuery() {
+        // Arrange
+        String q = "Disponible";
+        Article art1 = new Article(1, "Balon", "Disponible", "Desc1", "/images/balon.png");
+        Article art2 = new Article(2, "Raqueta", "Disponible", "Desc2", "/images/raqueta.png");
+        when(articleService.getArticlesStatus("Disponible"))
+                .thenReturn(Arrays.asList(art1, art2));
 
-        mockMvc.perform(post("/Article")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(dto)))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.Error").value("Error al guardar el articulo"));
-    }
+        // Act
+        ResponseEntity<?> response = articleController.getArticles(q);
 
-    // Pruebas para update
-    @Test
-    void testUpdateArticleSuccess() throws Exception {
-        ArticleDto dto = new ArticleDto("Laptop", "Dañado", "Desc", null);
-        Article updated = new Article(1, "Laptop", "Dañado", "Desc", "/images/laptop.png");
-        Mockito.when(articleService.update(1, dto)).thenReturn(updated);
-
-        mockMvc.perform(put("/Article/1")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(dto)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.articleStatus").value("Dañado"));
+        // Assert
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        Map<?, ?> body = (Map<?, ?>) response.getBody();
+        assertNotNull(body);
+        List<?> resultList = (List<?>) body.get("articulos");
+        assertEquals(2, resultList.size());
+        verify(articleService, times(1)).getArticlesStatus("Disponible");
     }
 
     @Test
-    void testUpdateArticleNotFound() throws Exception {
-        ArticleDto dto = new ArticleDto("Laptop", "Dañado", "Desc", null);
-        Mockito.when(articleService.update(99, dto)).thenThrow(new RuntimeException("Artículo no encontrado"));
+    void testGetArticles_NameQuery() {
+        // Arrange
+        String q = "Raqueta";
+        Article art = new Article(2, "Raqueta", "Disponible", "Desc2", "/images/raqueta.png");
+        when(articleService.getArticlesNames("Raqueta"))
+                .thenReturn(Collections.singletonList(art));
 
-        mockMvc.perform(put("/Article/99")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(dto)))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.Error").value("Error al actualizar el articulo"));
-    }
+        // Act
+        ResponseEntity<?> response = articleController.getArticles(q);
 
-    // Pruebas para delete
-    @Test
-    void testDeleteArticleSuccess() throws Exception {
-        Article mockArticle = new Article(1, "Laptop", "Disponible", "Desc", "img.png");
-        Mockito.when(articleService.delete(1)).thenReturn(mockArticle);
-
-        mockMvc.perform(delete("/Article/1"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Articulo eliminado correctamente"));
-    }
-
-    @Test
-    void testDeleteArticleFailure() throws Exception {
-        Mockito.doThrow(new RuntimeException("Error eliminando")).when(articleService).delete(1);
-
-        mockMvc.perform(delete("/Article/1"))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.Error").value("Error al eliminar el articulo"));
-    }
-
-    // Pruebas para getAllAlerts
-    @Test
-    void testGetAllAlertsSuccess() throws Exception {
-        Mockito.when(alertRepository.findAll()).thenReturn(Collections.emptyList());
-
-        mockMvc.perform(get("/Article/alerts"))
-                .andExpect(status().isOk());
+        // Assert
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        Map<?, ?> body = (Map<?, ?>) response.getBody();
+        assertNotNull(body);
+        @SuppressWarnings("unchecked")
+        List<Article> resultList = (List<Article>) body.get("articulos");
+        assertEquals(1, resultList.size());
+        verify(articleService, times(1)).getArticlesNames("Raqueta");
     }
 
     @Test
-    void testGetAllAlertsFailure() throws Exception {
-        Mockito.when(alertRepository.findAll()).thenThrow(new RuntimeException("Error"));
+    void testGetArticles_Exception() {
+        // Arrange
+        String q = "someQuery";
+        when(articleService.getArticlesNames("someQuery"))
+                .thenThrow(new RuntimeException("Simulated exception"));
 
-        mockMvc.perform(get("/Article/alerts"))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$['Error ']").value("Error al obtener las alertas")) // Notación corregida
-                .andExpect(jsonPath("$['Message ']").exists());
+        // Act
+        ResponseEntity<?> response = articleController.getArticles(q);
+
+        // Assert
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+        Map<?, ?> body = (Map<?, ?>) response.getBody();
+        assertNotNull(body);
+        assertEquals("Error al obtener artículos", body.get("error"));
+        verify(articleService, times(1)).getArticlesNames("someQuery");
+    }
+
+    @Test
+    void testSave_Success() {
+        // Arrange
+        ArticleDto dto = ArticleDto.builder()
+                .name("Balon")
+                .articleStatus("Disponible")
+                .description("Desc")
+                .build();
+        Article expectedArticle = new Article(1, "Balon", "Disponible", "Desc", "/images/balon.png");
+        when(articleService.save(dto)).thenReturn(expectedArticle);
+
+        // Act
+        ResponseEntity<Object> response = articleController.save(dto);
+
+        // Assert
+        assertEquals(HttpStatus.CREATED, response.getStatusCode());
+        assertNotNull(response.getBody());
+        Article savedArticle = (Article) response.getBody();
+        assertEquals(expectedArticle, savedArticle);
+        verify(articleService, times(1)).save(dto);
+    }
+
+    @Test
+    void testSave_Exception() {
+        // Arrange
+        ArticleDto dto = new ArticleDto();
+        when(articleService.save(dto)).thenThrow(new RuntimeException("Simulated save error"));
+
+        // Act
+        ResponseEntity<Object> response = articleController.save(dto);
+
+        // Assert
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+        Map<?, ?> body = (Map<?, ?>) response.getBody();
+        assertNotNull(body);
+        assertEquals("Error al guardar el articulo", body.get("Error"));
+        verify(articleService, times(1)).save(dto);
+    }
+
+    @Test
+    void testUpdate_Success() {
+        // Arrange
+        Integer id = 1;
+        ArticleDto dto = new ArticleDto();
+        Article updatedArticle = new Article(1, "Balon", "Disponible", "Desc", "/images/balon.png");
+        when(articleService.update(id, dto)).thenReturn(updatedArticle);
+
+        // Act
+        ResponseEntity<Object> response = articleController.update(id, dto);
+
+        // Assert
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        Article resultArticle = (Article) response.getBody();
+        assertNotNull(resultArticle);
+        assertEquals(updatedArticle, resultArticle);
+        verify(articleService, times(1)).update(id, dto);
+    }
+
+    @Test
+    void testUpdate_Exception() {
+        // Arrange
+        Integer id = 99;
+        ArticleDto dto = new ArticleDto();
+        when(articleService.update(id, dto)).thenThrow(new RuntimeException("Simulated update error"));
+
+        // Act
+        ResponseEntity<Object> response = articleController.update(id, dto);
+
+        // Assert
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+        Map<?, ?> body = (Map<?, ?>) response.getBody();
+        assertNotNull(body);
+        assertEquals("Error al actualizar el articulo", body.get("Error"));
+        verify(articleService, times(1)).update(id, dto);
+    }
+
+    @Test
+    void testDelete_Success() {
+        // Arrange
+        Integer id = 1;
+        Article deletedArticle = new Article(1, "Balon", "Disponible", "Desc", "/images/balon.png");
+        when(articleService.delete(id)).thenReturn(deletedArticle);
+
+        // Act
+        ResponseEntity<Object> response = articleController.delete(id);
+
+        // Assert
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        Map<?, ?> body = (Map<?, ?>) response.getBody();
+        assertNotNull(body);
+        assertEquals("Articulo eliminado correctamente", body.get("message"));
+        verify(articleService, times(1)).delete(id);
+    }
+
+    @Test
+    void testDelete_Exception() {
+        // Arrange
+        Integer id = 99;
+        when(articleService.delete(id)).thenThrow(new RuntimeException("Simulated delete error"));
+
+        // Act
+        ResponseEntity<Object> response = articleController.delete(id);
+
+        // Assert
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+        Map<?, ?> body = (Map<?, ?>) response.getBody();
+        assertNotNull(body);
+        assertEquals("Error al eliminar el articulo", body.get("Error"));
+        verify(articleService, times(1)).delete(id);
+    }
+
+    @Test
+    void testGetAllAlerts_Success() {
+        // Arrange
+        Alert alert = new Alert("id1", "Balon", "Mensaje", LocalDateTime.now());
+        when(alertRepository.findAll()).thenReturn(Collections.singletonList(alert));
+
+        // Act
+        ResponseEntity<?> response = articleController.getAllAlerts();
+
+        // Assert
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        List<Alert> alerts = (List<Alert>) response.getBody();
+        assertEquals(1, alerts.size());
+        verify(alertRepository, times(1)).findAll();
+    }
+
+    @Test
+    void testGetAllAlerts_Exception() {
+        // Arrange
+        when(alertRepository.findAll()).thenThrow(new RuntimeException("Simulated alert error"));
+
+        // Act
+        ResponseEntity<?> response = articleController.getAllAlerts();
+
+        // Assert
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+        Map<?, ?> body = (Map<?, ?>) response.getBody();
+        assertNotNull(body);
+        assertEquals("Error al obtener las alertas", body.get("Error "));
+        verify(alertRepository, times(1)).findAll();
     }
 }

@@ -131,7 +131,7 @@ public class ArticleService {
     public Optional<List<Article>> findByArticleStatus(String articleStatus) {
         return articleRepository.findByName(articleStatus);
     }
-    void checkStockAndAlert(String name) {
+    public void checkStockAndAlert(String name) {
         long count = articleRepository.findByName(name)
             .orElseThrow(() -> new RuntimeException("Nombre del artículo no encontrado: " + name))
             .stream()
