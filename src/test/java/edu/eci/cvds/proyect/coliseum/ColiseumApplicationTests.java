@@ -1,13 +1,13 @@
 package edu.eci.cvds.proyect.coliseum;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
-@SpringBootTest
-class ColiseumApplicationTests {
+class ColiseumApplicationTest {
 
 	@Test
-	void contextLoads() {
+	void testMain() {
+		// Ensure that main method runs without throwing any exceptions
+		assertDoesNotThrow(() -> ColiseumApplication.main(new String[]{}));
 	}
-
 }
