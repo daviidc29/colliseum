@@ -1,16 +1,14 @@
 package edu.eci.cvds.proyect.coliseum.persistency.Exception;
 
 import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.Mockito;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,42 +18,46 @@ import static org.mockito.Mockito.when;
 
 class ValidationExceptionHandlerTest {
 
-    @InjectMocks
-    private ValidationExceptionHandler validationExceptionHandler;
+    @Test
+    void shouldHandleValidationExceptionsWithMultipleFieldErrors() {
+        // Preparar objetos simulados (mocks)
+        BindingResult bindingResult = Mockito.mock(BindingResult.class);
+        List<FieldError> fieldErrors = new ArrayList<>();
+        fieldErrors.add(new FieldError("ObjectName", "campo1", "Error en campo1"));
+        fieldErrors.add(new FieldError("ObjectName", "campo2", "Error en campo2"));
+        when(bindingResult.getFieldErrors()).thenReturn(fieldErrors);
 
-    @Mock
-    private MethodArgumentNotValidException methodArgumentNotValidException;
+        MethodArgumentNotValidException ex = new MethodArgumentNotValidException(null, bindingResult);
 
-    @Mock
-    private BindingResult bindingResult;
+        // Instanciar el handler y ejecutar el método
+        ValidationExceptionHandler handler = new ValidationExceptionHandler();
+        ResponseEntity<Map<String, String>> response = handler.handleValidationExceptions(ex);
 
-    public ValidationExceptionHandlerTest() {
-        MockitoAnnotations.openMocks(this);
+        // Verificar resultados
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        Map<String, String> expectedErrors = new HashMap<>();
+        expectedErrors.put("campo1", "Error en campo1");
+        expectedErrors.put("campo2", "Error en campo2");
+        assertEquals(expectedErrors, response.getBody());
     }
 
     @Test
-    void testHandleValidationExceptions_ReturnsBadRequestAndFieldErrors() {
-        // Arrange
-        List<FieldError> fieldErrors = Arrays.asList(
-                new FieldError("TestObject", "field1", "Error message 1"),
-                new FieldError("TestObject", "field2", "Error message 2")
-        );
-
-        when(methodArgumentNotValidException.getBindingResult()).thenReturn(bindingResult);
+    void shouldHandleValidationExceptionsWithNoFieldErrors() {
+        // Preparar objetos simulados (mocks)
+        BindingResult bindingResult = Mockito.mock(BindingResult.class);
+        List<FieldError> fieldErrors = new ArrayList<>();
         when(bindingResult.getFieldErrors()).thenReturn(fieldErrors);
 
-        // Act
-        ResponseEntity<Map<String, String>> response =
-                validationExceptionHandler.handleValidationExceptions(methodArgumentNotValidException);
+        MethodArgumentNotValidException ex = new MethodArgumentNotValidException(null, bindingResult);
 
-        // Assert
+        // Instanciar el handler y ejecutar el método
+        ValidationExceptionHandler handler = new ValidationExceptionHandler();
+        ResponseEntity<Map<String, String>> response = handler.handleValidationExceptions(ex);
+
+        // Verificar resultados
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-
-        Map<String, String> body = response.getBody();
-        Map<String, String> expected = new HashMap<>();
-        expected.put("field1", "Error message 1");
-        expected.put("field2", "Error message 2");
-
-        assertEquals(expected, body);
+        // Se espera un mapa vacío cuando no hay errores
+        assertEquals(new HashMap<>(), response.getBody());
     }
+
 }

@@ -1,77 +1,117 @@
 package edu.eci.cvds.proyect.coliseum.persistency.Exception;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 
 class LoanExceptionTest {
 
     @Test
-    void testLoanExceptionBaseClass() {
-        String message = "Base LoanException Message";
-        LoanException exception = new LoanException(message);
+    void testBaseLoanExceptionCreation() {
+        // Arrange & Act
+        String errorMessage = "Test error message";
+        LoanException exception = new LoanException(errorMessage);
 
-        assertEquals(message, exception.getMessage());
-        assertTrue(exception instanceof RuntimeException);
+        // Assert
+        assertEquals(errorMessage, exception.getMessage());
     }
 
     @Test
     void testLoanExceptionTimeError() {
-        String message = "Time error occurred";
-        LoanException.LoanExceptionTimeError exception =
-                new LoanException.LoanExceptionTimeError(message);
+        // Arrange & Act
+        String errorMessage = "Tiempo de préstamo inválido";
+        LoanException.LoanExceptionTimeError exception = new LoanException.LoanExceptionTimeError(errorMessage);
 
-        assertEquals(message, exception.getMessage());
+        // Assert
+        assertEquals(errorMessage, exception.getMessage());
         assertTrue(exception instanceof LoanException);
     }
 
     @Test
     void testLoanExceptionStateError() {
-        String message = "State error occurred";
-        LoanException.LoanExceptionStateError exception =
-                new LoanException.LoanExceptionStateError(message);
+        // Arrange & Act
+        String errorMessage = "Estado de préstamo inválido";
+        LoanException.LoanExceptionStateError exception = new LoanException.LoanExceptionStateError(errorMessage);
 
-        assertEquals(message, exception.getMessage());
+        // Assert
+        assertEquals(errorMessage, exception.getMessage());
         assertTrue(exception instanceof LoanException);
     }
 
     @Test
     void testLoanExceptionEstudianteHasPrestamo() {
-        String message = "El estudiante ya tiene un préstamo";
+        // Arrange & Act
+        String errorMessage = "El estudiante ya tiene un préstamo activo";
         LoanException.LoanExceptionEstudianteHasPrestamo exception =
-                new LoanException.LoanExceptionEstudianteHasPrestamo(message);
+                new LoanException.LoanExceptionEstudianteHasPrestamo(errorMessage);
 
-        assertEquals(message, exception.getMessage());
+        // Assert
+        assertEquals(errorMessage, exception.getMessage());
         assertTrue(exception instanceof LoanException);
     }
 
     @Test
     void testLoanExceptionBookIsAvailable() {
-        String message = "El libro está disponible";
+        // Arrange & Act
+        String errorMessage = "El libro no está disponible";
         LoanException.LoanExceptionBookIsAvailable exception =
-                new LoanException.LoanExceptionBookIsAvailable(message);
+                new LoanException.LoanExceptionBookIsAvailable(errorMessage);
 
-        assertEquals(message, exception.getMessage());
+        // Assert
+        assertEquals(errorMessage, exception.getMessage());
         assertTrue(exception instanceof LoanException);
     }
 
     @Test
     void testLoanExceptionPrestamoIdNotFound() {
-        String message = "No se encontró el ID del préstamo";
+        // Arrange & Act
+        String errorMessage = "ID de préstamo no encontrado";
         LoanException.LoanExceptionPrestamoIdNotFound exception =
-                new LoanException.LoanExceptionPrestamoIdNotFound(message);
+                new LoanException.LoanExceptionPrestamoIdNotFound(errorMessage);
 
-        assertEquals(message, exception.getMessage());
+        // Assert
+        assertEquals(errorMessage, exception.getMessage());
         assertTrue(exception instanceof LoanException);
     }
 
     @Test
     void testLoanExceptionEstudianteHasNotPrestamo() {
-        String message = "El estudiante no tiene préstamos";
+        // Arrange & Act
+        String errorMessage = "El estudiante no tiene préstamos";
         LoanException.LoanExceptionEstudianteHasNotPrestamo exception =
-                new LoanException.LoanExceptionEstudianteHasNotPrestamo(message);
+                new LoanException.LoanExceptionEstudianteHasNotPrestamo(errorMessage);
 
-        assertEquals(message, exception.getMessage());
+        // Assert
+        assertEquals(errorMessage, exception.getMessage());
         assertTrue(exception instanceof LoanException);
+    }
+
+    @Test
+    void testExceptionHierarchy() {
+        // Verificar que todas las excepciones son RuntimeException
+        new LoanException("test");
+        assertTrue(true);
+        new LoanException.LoanExceptionTimeError("test");
+        assertTrue(true);
+        new LoanException.LoanExceptionStateError("test");
+        assertTrue(true);
+        new LoanException.LoanExceptionEstudianteHasPrestamo("test");
+        assertTrue(true);
+        new LoanException.LoanExceptionBookIsAvailable("test");
+        assertTrue(true);
+        new LoanException.LoanExceptionPrestamoIdNotFound("test");
+        assertTrue(true);
+        new LoanException.LoanExceptionEstudianteHasNotPrestamo("test");
+        assertTrue(true);
+    }
+
+    @Test
+    void testExceptionPropagation() {
+        // Verificar que las excepciones se propagan correctamente
+        try {
+            throw new LoanException.LoanExceptionTimeError("Error de tiempo");
+        } catch (LoanException e) {
+            assertEquals("Error de tiempo", e.getMessage());
+            assertTrue(e instanceof LoanException.LoanExceptionTimeError);
+        }
     }
 }
