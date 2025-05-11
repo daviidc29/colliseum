@@ -3,7 +3,6 @@ package edu.eci.cvds.proyect.coliseum.persistency.exception;
 
 import org.junit.jupiter.api.Test;
 
-import edu.eci.cvds.proyect.coliseum.persistency.exception.LoanException;
 
 import static org.junit.jupiter.api.Assertions.*;
 

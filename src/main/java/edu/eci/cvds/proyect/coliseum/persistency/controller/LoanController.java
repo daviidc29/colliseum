@@ -13,7 +13,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 
-import org.apache.commons.lang3.StringEscapeUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -199,28 +198,25 @@ public class LoanController {
     public ResponseEntity<?> deleteLoan(
             @Parameter(description = "ID del préstamo a eliminar", required = true)
             @PathVariable String id) {
-        
-        // Validación de entrada
+        logger.info("Solicitando eliminar préstamo con ID: {}", id);
         try {
             validateId(id);
-        } catch (IllegalArgumentException e) {
-            logger.warn("ID de préstamo inválido recibido: {}", StringEscapeUtils.escapeJava(id));
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(Collections.singletonMap(ERROR_KEY, "ID de préstamo inválido"));
-        }
-
-        logger.info("Solicitando eliminar préstamo con ID: {}", StringEscapeUtils.escapeJava(id));
-
-        try {
             loanService.deleteLoanById(id);
-            logger.info("Préstamo eliminado exitosamente con ID: {}", StringEscapeUtils.escapeJava(id));
+            logger.info("Préstamo eliminado exitosamente: {}", id);
             return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
         } catch (LoanException e) {
-            logger.error("Error de negocio al eliminar préstamo {}: {}", StringEscapeUtils.escapeJava(id), e.getMessage());
+            logger.error("Error al eliminar préstamo {}: {}", id, e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Collections.singletonMap(ERROR_KEY, e.getMessage()));
+        } catch (IllegalArgumentException e) {
+            logger.error("ID de préstamo inválido: {}", id);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Collections.singletonMap(ERROR_KEY, e.getMessage()));
         }
     }
+
+
+
     // Endpoint GET unificado
     @GetMapping
     @Operation(
