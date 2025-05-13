@@ -16,4 +16,6 @@ public interface ArticleRepository extends MongoRepository<Article, Integer> {
     Optional<List<Article>> findByName(String name);
     long countByNameAndArticleStatus(String name, String articleStatus);
     List<Article> findByArticleStatusAndIdNotIn(String articleStatus, Collection<Integer> ids);
+    // Agregar este método a la interfaz ArticleRepository
+    Optional<List<Article>> findByNameContainingIgnoreCase(String name);
 }

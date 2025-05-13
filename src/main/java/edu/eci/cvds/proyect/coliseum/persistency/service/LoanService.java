@@ -8,6 +8,9 @@ import edu.eci.cvds.proyect.coliseum.persistency.repository.AlertRepository;
 import edu.eci.cvds.proyect.coliseum.persistency.repository.ArticleRepository;
 import edu.eci.cvds.proyect.coliseum.persistency.repository.LoanRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -84,12 +87,15 @@ public class LoanService {
     private final LoanRepository loanRepository;
     private final ArticleRepository articleRepository;
     private final AlertRepository alertRepository;
+    private final MongoTemplate mongoTemplate;
+
 
     @Autowired
-    public LoanService(LoanRepository loanRepository, ArticleRepository articleRepository, AlertRepository alertRepository) {
+    public LoanService(LoanRepository loanRepository, ArticleRepository articleRepository, AlertRepository alertRepository, MongoTemplate mongoTemplate, MongoTemplate mongoTemplate1) {
         this.loanRepository = Objects.requireNonNull(loanRepository, "loanRepository must not be null");
         this.articleRepository = Objects.requireNonNull(articleRepository, "articleRepository must not be null");
         this.alertRepository = Objects.requireNonNull(alertRepository, "alertRepository must not be null");
+        this.mongoTemplate = mongoTemplate;
     }
 
     @Transactional
@@ -381,7 +387,7 @@ public class LoanService {
         ));
     }
 
-    private LocalDate parseDate(Object dateValue) {
+    LocalDate parseDate(Object dateValue) {
         if (dateValue == null) {
             throw new IllegalArgumentException("La fecha no puede ser null");
         }
@@ -472,18 +478,35 @@ public class LoanService {
         }
     }
 
+    // En LoanService
     public List<Loan> getLoansByDateRangeAndStatus(LocalDate startDate, LocalDate endDate, String status) {
-        validateDateRange(startDate, endDate);
+        // Agrega logs para depuración
+        logger.info("Buscando préstamos entre {} y {} con estado: {}", startDate, endDate, status);
 
-        if (status == null || status.isEmpty()) {
-            return loanRepository.findByLoanDateBetween(startDate, endDate);
+        try {
+            // Construir la consulta para MongoDB
+            Query query = new Query();
+
+            // Criterio para el rango de fechas
+            Criteria dateCriteria = Criteria.where("loanDate").gte(startDate).lte(endDate);
+            query.addCriteria(dateCriteria);
+
+            // Agregar criterio de estado si se proporciona
+            if (status != null && !status.isEmpty()) {
+                query.addCriteria(Criteria.where("loanStatus").is(status));
+            }
+
+            // Ejecutar consulta
+            List<Loan> loans = mongoTemplate.find(query, Loan.class);
+
+            // Log para depuración
+            logger.info("Se encontraron {} préstamos en el rango de fechas", loans.size());
+
+            return loans;
+        } catch (Exception e) {
+            logger.error("Error al buscar préstamos por rango de fechas", e);
+            throw new LoanException("Error al buscar préstamos por rango de fechas: " + e.getMessage());
         }
-
-        if (!LoanStatus.isValid(status)) {
-            throw new IllegalArgumentException("Estado de préstamo inválido: " + status);
-        }
-
-        return loanRepository.findByLoanDateBetweenAndLoanStatus(startDate, endDate, status);
     }
 
     public List<Loan> getLoansByUserReport(String userId) {

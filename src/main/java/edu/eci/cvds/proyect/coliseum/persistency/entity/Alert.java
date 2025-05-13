@@ -10,6 +10,7 @@ import org.springframework.data.mongodb.core.mapping.Document;
 public class Alert {
     @Id
     private String id;
+    private String userId;
     private String description;
     private String message;
     private LocalDateTime timestamp;
