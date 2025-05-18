@@ -33,8 +33,9 @@ public class SecurityConfig {
                                 "/swagger-ui/**", "/v3/api-docs/**", "/swagger-resources/**", "/webjars/**"
                         ).permitAll()
 
-                        .requestMatchers("/Article", "/Article/**").hasAnyRole("Admin")
-                        .requestMatchers("/Loan", "/Loan/**").hasAnyRole("Admin", "Student", "Teacher")
+                        .requestMatchers("/Article", "/Article/**").hasAnyRole("ADMIN")
+                        .requestMatchers("/Loan", "/Loan/**").hasAnyRole("ADMIN", "STUDENT", "TEACHER")
+
 
                         .anyRequest().authenticated()
                 )
