@@ -10,17 +10,19 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 
 @Data               // Genera getters, setters, toString, equals y hashCode
 @NoArgsConstructor  // Constructor sin argumentos
 @AllArgsConstructor // Constructor con todos los campos
 @Builder
-@Document(collection="loans")// Builder pattern
+@Document(collection="loanArticle")// Builder pattern
 
-public class Loan {
+public class LoanArticle {
     @Id
     private String id;
 
@@ -46,8 +48,17 @@ public class Loan {
     private LocalDateTime creationDate;
 
     private LocalDate loanDate;
+    private LocalTime startTime;
+    private LocalTime endTime;
 
     private LocalDate devolutionDate;
+    // Método de conveniencia para obtener la duración del préstamo
+    public Duration getDuration() {
+        if (startTime != null && endTime != null) {
+            return Duration.between(startTime, endTime);
+        }
+        return null;
+    }
 
     @NotBlank(message="El estado del prestamo no puede estar vacío")
     @Pattern(regexp="Prestado|Vencido|Devuelto",message="El estado del prestamo no es valido")

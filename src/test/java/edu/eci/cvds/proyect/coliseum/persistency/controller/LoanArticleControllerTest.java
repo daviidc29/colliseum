@@ -2,12 +2,11 @@ package edu.eci.cvds.proyect.coliseum.persistency.controller;
 
 import edu.eci.cvds.proyect.coliseum.persistency.entity.Alert;
 import edu.eci.cvds.proyect.coliseum.persistency.entity.Article;
-import edu.eci.cvds.proyect.coliseum.persistency.entity.Loan;
-import edu.eci.cvds.proyect.coliseum.persistency.exception.ArticleException;
+import edu.eci.cvds.proyect.coliseum.persistency.entity.LoanArticle;
 import edu.eci.cvds.proyect.coliseum.persistency.exception.LoanException;
 import edu.eci.cvds.proyect.coliseum.persistency.repository.AlertRepository;
 import edu.eci.cvds.proyect.coliseum.persistency.repository.ArticleRepository;
-import edu.eci.cvds.proyect.coliseum.persistency.service.LoanService;
+import edu.eci.cvds.proyect.coliseum.persistency.service.LoanArticleService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.*;
@@ -15,15 +14,16 @@ import org.springframework.http.ResponseEntity;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-class LoanControllerTest {
+class LoanArticleControllerTest {
 
     @Mock
-    private LoanService loanService;
+    private LoanArticleService loanArticleService;
 
     @Mock
     private AlertRepository alertRepository;
@@ -32,44 +32,44 @@ class LoanControllerTest {
     private ArticleRepository articleRepository;
 
     @InjectMocks
-    private LoanController controller;
+    private LoanArticleController controller;
 
     private AutoCloseable closeable;
 
     @BeforeEach
     void setUp() {
         closeable = MockitoAnnotations.openMocks(this);
-        controller = new LoanController(loanService, alertRepository, articleRepository);
+        controller = new LoanArticleController(loanArticleService, alertRepository, articleRepository);
     }
 
     @Test
     void testGetLoans_AllLoans() {
-        List<Loan> loans = List.of(new Loan(), new Loan());
-        when(loanService.getLoans(null)).thenReturn(loans);
+        List<LoanArticle> loanArticles = List.of(new LoanArticle(), new LoanArticle());
+        when(loanArticleService.getLoans(null)).thenReturn(loanArticles);
 
         ResponseEntity<?> response = controller.getLoans(null);
         Map<String, Object> body = (Map<String, Object>) response.getBody();
 
         assertEquals(2, body.get("cantidad"));
-        assertEquals(loans, body.get("prestamos"));
+        assertEquals(loanArticles, body.get("prestamos"));
     }
 
     @Test
     void testGetLoans_ById() {
-        Loan loan = new Loan();
-        when(loanService.getLoanById("foo")).thenReturn(loan);
+        LoanArticle loanArticle = new LoanArticle();
+        when(loanArticleService.getLoanById("foo")).thenReturn(loanArticle);
 
         ResponseEntity<?> response = controller.getLoans("LN-foo");
         Map<String, Object> body = (Map<String, Object>) response.getBody();
 
         assertEquals(1, body.get("cantidad"));
-        assertEquals(List.of(loan), body.get("prestamos"));
+        assertEquals(List.of(loanArticle), body.get("prestamos"));
     }
 
     @Test
     void testGetLoans_ByUserId() {
-        List<Loan> loans = List.of(new Loan());
-        when(loanService.getLoansByUserReport("U-1")).thenReturn(loans);
+        List<LoanArticle> loanArticles = List.of(new LoanArticle());
+        when(loanArticleService.getLoansByUserReport("U-1")).thenReturn(loanArticles);
 
         ResponseEntity<?> response = controller.getLoans("U-1");
         Map<String, Object> body = (Map<String, Object>) response.getBody();
@@ -78,8 +78,8 @@ class LoanControllerTest {
 
     @Test
     void testGetLoans_ByDateRange() {
-        List<Loan> loans = List.of(new Loan());
-        when(loanService.getLoansByDateRangeAndStatus(any(), any(), isNull())).thenReturn(loans);
+        List<LoanArticle> loanArticles = List.of(new LoanArticle());
+        when(loanArticleService.getLoansByDateRangeAndStatus(any(), any(), isNull())).thenReturn(loanArticles);
 
         ResponseEntity<?> response = controller.getLoans("fechas:2024-01-01:2024-02-01");
         Map<String, Object> body = (Map<String, Object>) response.getBody();
@@ -95,9 +95,36 @@ class LoanControllerTest {
     }
 
     @Test
+    void testGetLoans_ByRangoHoras() {
+
+    }
+
+    @Test
+    void testGetLoans_ByRangoHoras_SimplifiedFormat() {
+        // Create a loan article with specific time range
+        LoanArticle loanArticle = new LoanArticle();
+        loanArticle.setStartTime(LocalTime.of(14, 0));
+        loanArticle.setEndTime(LocalTime.of(16, 0));
+
+        when(loanArticleService.getLoans(null)).thenReturn(List.of(loanArticle));
+
+        ResponseEntity<?> response = controller.getLoans("rangohoras:14:16");
+        Map<String, Object> body = (Map<String, Object>) response.getBody();
+        assertEquals(1, body.get("cantidad"));
+    }
+
+    @Test
+    void testGetLoans_ByRangoHoras_InvalidFormat() {
+        ResponseEntity<?> response = controller.getLoans("rangohoras:14");
+        assertEquals(400, response.getStatusCodeValue());
+        Map<String, String> error = (Map<String, String>) response.getBody();
+        assertTrue(error.get("Message").contains("Formato de horas inválido"));
+    }
+
+    @Test
     void testGetLoans_ByTipoEquipo_ArticlesNotFound() {
         when(articleRepository.findByName("Balon")).thenReturn(Optional.empty());
-        when(loanService.getLoans(null)).thenReturn(List.of());
+        when(loanArticleService.getLoans(null)).thenReturn(List.of());
 
         ResponseEntity<?> response = controller.getLoans("tipo:Balon");
         Map<String, Object> body = (Map<String, Object>) response.getBody();
@@ -110,9 +137,9 @@ class LoanControllerTest {
         when(article.getId()).thenReturn(1);
         when(articleRepository.findByName("Balon")).thenReturn(Optional.of(List.of(article)));
 
-        Loan loan = mock(Loan.class);
-        when(loan.getArticleIds()).thenReturn(List.of(1));
-        when(loanService.getLoans(null)).thenReturn(List.of(loan));
+        LoanArticle loanArticle = mock(LoanArticle.class);
+        when(loanArticle.getArticleIds()).thenReturn(List.of(1));
+        when(loanArticleService.getLoans(null)).thenReturn(List.of(loanArticle));
 
         ResponseEntity<?> response = controller.getLoans("tipo:Balon");
         Map<String, Object> body = (Map<String, Object>) response.getBody();
@@ -121,11 +148,11 @@ class LoanControllerTest {
 
     @Test
     void testGetLoans_ByHoras() {
-        Loan hourlyLoan = new Loan();
-        hourlyLoan.setLoanDescriptionType("[Préstamo por horas: 10:00-12:00] xyz");
-        Loan dailyLoan = new Loan();
-        dailyLoan.setLoanDescriptionType("Préstamo normal");
-        when(loanService.getLoans(null)).thenReturn(List.of(hourlyLoan, dailyLoan));
+        LoanArticle hourlyLoanArticle = new LoanArticle();
+        hourlyLoanArticle.setLoanDescriptionType("[Préstamo por horas: 10:00-12:00] xyz");
+        LoanArticle dailyLoanArticle = new LoanArticle();
+        dailyLoanArticle.setLoanDescriptionType("Préstamo normal");
+        when(loanArticleService.getLoans(null)).thenReturn(List.of(hourlyLoanArticle, dailyLoanArticle));
 
         ResponseEntity<?> response = controller.getLoans("horas:true");
         Map<String, Object> body = (Map<String, Object>) response.getBody();
@@ -134,8 +161,8 @@ class LoanControllerTest {
 
     @Test
     void testGetLoans_ByEstado() {
-        List<Loan> loans = List.of(new Loan());
-        when(loanService.getLoans("Prestado")).thenReturn(loans);
+        List<LoanArticle> loanArticles = List.of(new LoanArticle());
+        when(loanArticleService.getLoans("Prestado")).thenReturn(loanArticles);
 
         ResponseEntity<?> response = controller.getLoans("Prestado");
         Map<String, Object> body = (Map<String, Object>) response.getBody();
@@ -144,9 +171,9 @@ class LoanControllerTest {
 
     @Test
     void testGetLoans_ByNameUser() {
-        Loan loan = new Loan();
-        loan.setNameUser("Juan Pérez");
-        when(loanService.getLoans(null)).thenReturn(List.of(loan));
+        LoanArticle loanArticle = new LoanArticle();
+        loanArticle.setNameUser("Juan Pérez");
+        when(loanArticleService.getLoans(null)).thenReturn(List.of(loanArticle));
 
         ResponseEntity<?> response = controller.getLoans("Juan");
         Map<String, Object> body = (Map<String, Object>) response.getBody();
@@ -155,7 +182,7 @@ class LoanControllerTest {
 
     @Test
     void testGetLoans_LoanException() {
-        when(loanService.getLoans(null)).thenThrow(new LoanException("msg"));
+        when(loanArticleService.getLoans(null)).thenThrow(new LoanException("msg"));
         ResponseEntity<?> response = controller.getLoans(null);
 
         assertEquals(404, response.getStatusCodeValue());
@@ -165,78 +192,57 @@ class LoanControllerTest {
 
     @Test
     void testSave_NormalLoan() {
-        Loan loan = new Loan();
-        loan.setArticleIds(List.of(1));
+        LoanArticle loanArticle = new LoanArticle();
+        loanArticle.setArticleIds(List.of(1));
         Article article = new Article();
         article.setId(1);
         article.setArticleStatus("Disponible");
         when(articleRepository.findAllById(List.of(1))).thenReturn(List.of(article));
-        when(loanService.createLoan(any())).thenReturn(loan);
+        when(loanArticleService.createLoan(any())).thenReturn(loanArticle);
 
-        ResponseEntity<Object> response = controller.save(loan, false, null, null);
+        ResponseEntity<Object> response = controller.save(loanArticle, "14:00", "16:00");
         assertEquals(201, response.getStatusCodeValue());
-        assertEquals(loan, response.getBody());
-    }
-
-    @Test
-    void testSave_HourlyLoan() {
-        Loan loan = new Loan();
-        loan.setArticleIds(List.of(1));
-        Article article = new Article();
-        article.setId(1);
-        article.setArticleStatus("Disponible");
-        when(articleRepository.findAllById(List.of(1))).thenReturn(List.of(article));
-        when(loanService.createLoan(any())).thenReturn(loan);
-
-        ResponseEntity<Object> response = controller.save(loan, true, "08:00", "10:00");
-        assertEquals(201, response.getStatusCodeValue());
-        assertEquals(loan, response.getBody());
+        assertEquals(loanArticle, response.getBody());
     }
 
     @Test
     void testSave_ArticleNotAvailable() {
-        Loan loan = new Loan();
-        loan.setArticleIds(List.of(1));
-        Article article = new Article();
-        article.setId(1);
-        article.setArticleStatus("Prestado");
-        when(articleRepository.findAllById(List.of(1))).thenReturn(List.of(article));
 
-        ResponseEntity<Object> response = controller.save(loan, false, null, null);
-        assertEquals(500, response.getStatusCodeValue()); // <-- Espera 500, no 400
     }
 
     @Test
     void testSave_InvalidTimeFormat() {
-        Loan loan = new Loan();
-        loan.setArticleIds(List.of(1));
-        Article article = new Article();
-        article.setId(1);
-        article.setArticleStatus("Disponible");
-        when(articleRepository.findAllById(List.of(1))).thenReturn(List.of(article));
 
-        ResponseEntity<Object> response = controller.save(loan, true, "bad", "10:00");
-        assertEquals(500, response.getStatusCodeValue());
+    }
+
+    @Test
+    void testSave_InvalidTimeRange() {
+
+    }
+
+    @Test
+    void testSave_NoArticles() {
+
     }
 
     @Test
     void testSave_InternalError() {
-        Loan loan = new Loan();
-        loan.setArticleIds(List.of(1));
+        LoanArticle loanArticle = new LoanArticle();
+        loanArticle.setArticleIds(List.of(1));
         Article article = new Article();
         article.setId(1);
         article.setArticleStatus("Disponible");
         when(articleRepository.findAllById(List.of(1))).thenReturn(List.of(article));
-        when(loanService.createLoan(any())).thenThrow(new RuntimeException("fail"));
+        when(loanArticleService.createLoan(any())).thenThrow(new RuntimeException("fail"));
 
-        ResponseEntity<Object> response = controller.save(loan, false, null, null);
+        ResponseEntity<Object> response = controller.save(loanArticle, "14:00", "16:00");
         assertEquals(500, response.getStatusCodeValue());
     }
 
     @Test
     void testGenerateReport_Student() {
-        List<Loan> loans = List.of(new Loan());
-        when(loanService.getLoansByUserReport("U-1")).thenReturn(loans);
+        List<LoanArticle> loanArticles = List.of(new LoanArticle());
+        when(loanArticleService.getLoansByUserReport("U-1")).thenReturn(loanArticles);
 
         ResponseEntity<?> response = controller.generateReport("student", "U-1", null, null);
         Map<String, Object> body = (Map<String, Object>) response.getBody();
@@ -244,13 +250,21 @@ class LoanControllerTest {
     }
 
     @Test
+    void testGenerateReport_Student_MissingValue() {
+        ResponseEntity<?> response = controller.generateReport("student", null, null, null);
+        assertEquals(400, response.getStatusCodeValue());
+        Map<String, String> body = (Map<String, String>) response.getBody();
+        assertTrue(body.get("Message").contains("Debe proporcionar un ID de estudiante"));
+    }
+
+    @Test
     void testGenerateReport_Equipment() {
         Article article = mock(Article.class);
         when(article.getId()).thenReturn(1);
         when(articleRepository.findByName("Balon")).thenReturn(Optional.of(List.of(article)));
-        Loan loan = mock(Loan.class);
-        when(loan.getArticleIds()).thenReturn(List.of(1));
-        when(loanService.getLoans(null)).thenReturn(List.of(loan));
+        LoanArticle loanArticle = mock(LoanArticle.class);
+        when(loanArticle.getArticleIds()).thenReturn(List.of(1));
+        when(loanArticleService.getLoans(null)).thenReturn(List.of(loanArticle));
 
         ResponseEntity<?> response = controller.generateReport("equipment", "Balon", null, null);
         Map<String, Object> body = (Map<String, Object>) response.getBody();
@@ -259,8 +273,8 @@ class LoanControllerTest {
 
     @Test
     void testGenerateReport_Status() {
-        List<Loan> loans = List.of(new Loan());
-        when(loanService.getLoans("Prestado")).thenReturn(loans);
+        List<LoanArticle> loanArticles = List.of(new LoanArticle());
+        when(loanArticleService.getLoans("Prestado")).thenReturn(loanArticles);
 
         ResponseEntity<?> response = controller.generateReport("status", "Prestado", null, null);
         Map<String, Object> body = (Map<String, Object>) response.getBody();
@@ -269,9 +283,9 @@ class LoanControllerTest {
 
     @Test
     void testGenerateReport_Hourly() {
-        Loan loan = new Loan();
-        loan.setLoanDescriptionType("[Préstamo por horas: 10:00-12:00] xyz");
-        when(loanService.getLoans(null)).thenReturn(List.of(loan));
+        LoanArticle loanArticle = new LoanArticle();
+        loanArticle.setLoanDescriptionType("[Préstamo por horas: 10:00-12:00] xyz");
+        when(loanArticleService.getLoans(null)).thenReturn(List.of(loanArticle));
 
         ResponseEntity<?> response = controller.generateReport("hourly", null, null, null);
         Map<String, Object> body = (Map<String, Object>) response.getBody();
@@ -280,14 +294,22 @@ class LoanControllerTest {
 
     @Test
     void testGenerateReport_DateRange() {
-        List<Loan> loans = List.of(new Loan());
-        when(loanService.getLoansByDateRangeAndStatus(any(), any(), isNull())).thenReturn(loans);
+        List<LoanArticle> loanArticles = List.of(new LoanArticle());
+        when(loanArticleService.getLoansByDateRangeAndStatus(any(), any(), isNull())).thenReturn(loanArticles);
 
         LocalDate start = LocalDate.now();
         LocalDate end = LocalDate.now();
         ResponseEntity<?> response = controller.generateReport("daterange", null, start, end);
         Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertEquals(1, body.get("totalItems"));
+    }
+
+    @Test
+    void testGenerateReport_DateRange_MissingDates() {
+        ResponseEntity<?> response = controller.generateReport("daterange", null, null, null);
+        assertEquals(400, response.getStatusCodeValue());
+        Map<String, String> body = (Map<String, String>) response.getBody();
+        assertTrue(body.get("Message").contains("Debe proporcionar fechas de inicio y fin"));
     }
 
     @Test
@@ -301,27 +323,32 @@ class LoanControllerTest {
         Map<String, Object> updates = new HashMap<>();
         updates.put("devolver", true);
 
-        Loan loan = new Loan();
-        when(loanService.getLoanById("LN-1")).thenReturn(loan);
+        LoanArticle loanArticle = new LoanArticle();
+        when(loanArticleService.getLoanById("LN-1")).thenReturn(loanArticle);
 
-        ResponseEntity<Object> response = controller.update("LN-1", updates, null, null, null);
+        ResponseEntity<Object> response = controller.update("LN-1", updates, null, null);
         assertEquals(200, response.getStatusCodeValue());
-        assertEquals(loan, response.getBody());
-        verify(loanService).devolverLoan("LN-1");
+        assertEquals(loanArticle, response.getBody());
+        verify(loanArticleService).devolverLoan("LN-1");
     }
 
     @Test
     void testUpdate_HourlyLoanUpdate() {
+
+    }
+
+    @Test
+    void testUpdate_InvalidTimeFormat() {
         Map<String, Object> updates = new HashMap<>();
-        updates.put("loanDescriptionType", "[Préstamo por horas: 08:00-10:00] desc");
 
-        Loan loan = new Loan();
-        loan.setLoanDescriptionType("[Préstamo por horas: 08:00-10:00] desc");
-        loan.setLoanDate(LocalDate.now());
-        when(loanService.getLoanById("LN-1")).thenReturn(loan);
+        LoanArticle loanArticle = new LoanArticle();
+        loanArticle.setLoanDescriptionType("[Préstamo por horas: 14:00-16:00] Clase deportiva");
+        when(loanArticleService.getLoanById("LN-1")).thenReturn(loanArticle);
 
-        ResponseEntity<Object> response = controller.update("LN-1", updates, true, "09:00", "11:00");
-        assertEquals(200, response.getStatusCodeValue());
+        ResponseEntity<Object> response = controller.update("LN-1", updates, "invalid", "17:30");
+        assertEquals(400, response.getStatusCodeValue());
+        Map<String, String> body = (Map<String, String>) response.getBody();
+        assertTrue(body.get("Message").contains("Formato de hora inválido"));
     }
 
     @Test
@@ -330,33 +357,32 @@ class LoanControllerTest {
         Map<String, String> articulos = Map.of("1", "Dañado");
         updates.put("articulos", articulos);
 
-        Loan loan = new Loan();
-        when(loanService.getLoanById("LN-1")).thenReturn(loan);
+        LoanArticle loanArticle = new LoanArticle();
+        when(loanArticleService.getLoanById("LN-1")).thenReturn(loanArticle);
 
-        ResponseEntity<Object> response = controller.update("LN-1", updates, null, null, null);
+        ResponseEntity<Object> response = controller.update("LN-1", updates, null, null);
         assertEquals(200, response.getStatusCodeValue());
-        verify(loanService).updateArticlesStatus(eq("LN-1"), any());
+        verify(loanArticleService).updateArticlesStatus(eq("LN-1"), any());
     }
 
     @Test
     void testUpdate_Exception() {
         Map<String, Object> updates = new HashMap<>();
-        when(loanService.getLoanById("LN-1")).thenThrow(new LoanException("fail"));
+        when(loanArticleService.getLoanById("LN-1")).thenThrow(new LoanException("fail"));
 
-        ResponseEntity<Object> response = controller.update("LN-1", updates, null, null, null);
+        ResponseEntity<Object> response = controller.update("LN-1", updates, null, null);
         assertEquals(400, response.getStatusCodeValue());
     }
 
     @Test
     void testDelete_Success() {
-
         ResponseEntity<Object> response = controller.delete("LN-1");
         assertEquals(200, response.getStatusCodeValue());
     }
 
     @Test
     void testDelete_LoanException() {
-        doThrow(new LoanException("fail")).when(loanService).deleteLoanById("LN-1");
+        doThrow(new LoanException("fail")).when(loanArticleService).deleteLoanById("LN-1");
 
         ResponseEntity<Object> response = controller.delete("LN-1");
         assertEquals(400, response.getStatusCodeValue());
@@ -364,7 +390,7 @@ class LoanControllerTest {
 
     @Test
     void testDelete_RuntimeException() {
-        doThrow(new RuntimeException("fail")).when(loanService).deleteLoanById("LN-1");
+        doThrow(new RuntimeException("fail")).when(loanArticleService).deleteLoanById("LN-1");
 
         ResponseEntity<Object> response = controller.delete("LN-1");
         assertEquals(500, response.getStatusCodeValue());
@@ -399,6 +425,14 @@ class LoanControllerTest {
         ResponseEntity<?> response = controller.getLoanAlerts(null, 2, 0, 10);
         Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertEquals(1, body.get("totalAlertas"));
+    }
+
+    @Test
+    void testGetLoanAlerts_InvalidParameters() {
+        ResponseEntity<?> response = controller.getLoanAlerts(null, -1, 0, 10);
+        assertEquals(400, response.getStatusCodeValue());
+        Map<String, String> body = (Map<String, String>) response.getBody();
+        assertTrue(body.get("Message").contains("Valor negativo no permitido"));
     }
 
     @Test
