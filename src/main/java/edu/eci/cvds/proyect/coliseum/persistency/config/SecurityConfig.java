@@ -33,7 +33,8 @@ public class SecurityConfig {
                 .requestMatchers(
                     "/swagger-ui/**", "/v3/api-docs/**", "/swagger-resources/**", "/webjars/**"
                 ).permitAll()
-                .requestMatchers("/auth/**").permitAll()
+                .requestMatchers("/Article", "/Article/**").hasAnyRole("ADMIN")
+                .requestMatchers("/LoanArticle", "/LoanArticle/**").hasAnyRole("ADMIN", "STUDENT", "TEACHER")
                 .anyRequest().authenticated()
             )
 
@@ -46,7 +47,7 @@ public class SecurityConfig {
 
 
 
-    @Bean
+   @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         String localFrontendUrl = "http://localhost:3000";
@@ -59,7 +60,7 @@ public class SecurityConfig {
                         : List.of(localFrontendUrl)
         );
 
-        configuration.setAllowedOrigins(List.of("http://localhost:3000"));
+        configuration.setAllowedOrigins(List.of("http://localhost:3000","https://9eaizp3wsf.execute-api.us-east-1.amazonaws.com"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept"));
         configuration.setAllowCredentials(true);
@@ -68,5 +69,4 @@ public class SecurityConfig {
         source.registerCorsConfiguration("/**", configuration);
         return source;
     }
-
 }
