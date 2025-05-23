@@ -30,13 +30,13 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(csrf -> csrf.disable())
             .authorizeHttpRequests(authz -> authz
-                .requestMatchers(
-                    "/swagger-ui/**", "/v3/api-docs/**", "/swagger-resources/**", "/webjars/**"
-                ).permitAll()
-                .requestMatchers("/Article", "/Article/**").hasAnyRole("ADMIN")
-                .requestMatchers("/LoanArticle", "/LoanArticle/**").hasAnyRole("ADMIN", "STUDENT", "TEACHER")
-                .anyRequest().authenticated()
-            )
+            .requestMatchers(
+               "/swagger-ui/**", "/v3/api-docs/**", "/swagger-resources/**", "/webjars/**",
+               "/authentication/login" // <-- AÑADE ESTO
+            ).permitAll()
+            .requestMatchers("/Article", "/Article/**").hasAnyRole("ADMIN")
+            .requestMatchers("/LoanArticle", "/LoanArticle/**").hasAnyRole("ADMIN", "STUDENT", "TEACHER")
+            .anyRequest().authenticated()
 
             .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
