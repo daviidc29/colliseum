@@ -45,7 +45,6 @@ jobs:
             -Dsonar.coverage.exclusions=**/*.java \
             -Dsonar.exclusions=**/*.java \
             -Dsonar.cpd.exclusions=**/*.java \
-            -Dsonar.issue.ignore.allfile=true \
             -Dsonar.issue.ignore.multicriteria=e1 \
             -Dsonar.issue.ignore.multicriteria.e1.ruleKey=java:S* \
             -Dsonar.issue.ignore.multicriteria.e1.resourceKey=**/*.java \
