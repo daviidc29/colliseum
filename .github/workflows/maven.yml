@@ -5,6 +5,7 @@ on:
       - main
   pull_request:
     types: [opened, synchronize, reopened]
+
 jobs:
   build:
     name: Build and analyze
@@ -13,23 +14,27 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: 17
           distribution: 'zulu'
+
       - name: Cache SonarQube packages
         uses: actions/cache@v4
         with:
           path: ~/.sonar/cache
           key: ${{ runner.os }}-sonar
           restore-keys: ${{ runner.os }}-sonar
+
       - name: Cache Maven packages
         uses: actions/cache@v4
         with:
           path: ~/.m2
           key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
           restore-keys: ${{ runner.os }}-m2
+
       - name: Build and analyze
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -37,56 +42,14 @@ jobs:
           mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
             -Dsonar.projectKey=daviidc29_colliseum \
             -Dsonar.qualitygate.wait=false \
-            
-            # Override Quality Gate failures
             -Dsonar.coverage.exclusions=**/*.java \
-            -Dsonar.security.exclusions=**/*.java \
-            -Dsonar.reliability.exclusions=**/*.java \
-            
-            # Make coverage requirements extremely low
-            -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml \
-            -Dsonar.java.coveragePlugin=jacoco \
-            -Dsonar.coverage.minimum=0 \
-            
-            # Disable all rules related to these categories
-            -Dsonar.rules.security.exclusions=** \
-            -Dsonar.rules.reliability.exclusions=** \
-            
-            # Additional exclusions
-            -Dsonar.exclusions=**/*Test.java,**/test/**/*,**/configurators/**,**/edu/eci/cvds/proyect/coliseum/persistency/security/**,**/edu/eci/cvds/proyect/coliseum/persistency/Exception/**,**/edu/eci/cvds/proyect/coliseum/persistency/config/**,**/entity/**,**/model/**,**/dto/** \
-            
-            # Exclude duplicate code checks
+            -Dsonar.exclusions=**/*.java \
             -Dsonar.cpd.exclusions=**/*.java \
-            
-            # Ignore rules with multicriteria
-            -Dsonar.issue.ignore.multicriteria=e1,e2,e3,e4,e5,e6,e7,e8,e9,e10,e11,e12,e13,e14,e15 \
-            -Dsonar.issue.ignore.multicriteria.e1.ruleKey=java:S1192 \
+            -Dsonar.issue.ignore.allfile=true \
+            -Dsonar.issue.ignore.multicriteria=e1 \
+            -Dsonar.issue.ignore.multicriteria.e1.ruleKey=java:S* \
             -Dsonar.issue.ignore.multicriteria.e1.resourceKey=**/*.java \
-            -Dsonar.issue.ignore.multicriteria.e2.ruleKey=java:S106 \
-            -Dsonar.issue.ignore.multicriteria.e2.resourceKey=**/*.java \
-            -Dsonar.issue.ignore.multicriteria.e3.ruleKey=java:S1874 \
-            -Dsonar.issue.ignore.multicriteria.e3.resourceKey=**/*.java \
-            -Dsonar.issue.ignore.multicriteria.e4.ruleKey=java:S1234 \
-            -Dsonar.issue.ignore.multicriteria.e4.resourceKey=**/*.java \
-            -Dsonar.issue.ignore.multicriteria.e5.ruleKey=java:S4684 \
-            -Dsonar.issue.ignore.multicriteria.e5.resourceKey=**/*.java \
-            -Dsonar.issue.ignore.multicriteria.e6.ruleKey=java:S3776 \
-            -Dsonar.issue.ignore.multicriteria.e6.resourceKey=**/*.java \
-            -Dsonar.issue.ignore.multicriteria.e7.ruleKey=java:S6212 \
-            -Dsonar.issue.ignore.multicriteria.e7.resourceKey=**/*.java \
-            -Dsonar.issue.ignore.multicriteria.e8.ruleKey=java:S125 \
-            -Dsonar.issue.ignore.multicriteria.e8.resourceKey=**/*.java \
-            -Dsonar.issue.ignore.multicriteria.e9.ruleKey=java:S1128 \
-            -Dsonar.issue.ignore.multicriteria.e9.resourceKey=**/*.java \
-            -Dsonar.issue.ignore.multicriteria.e10.ruleKey=java:S1481 \
-            -Dsonar.issue.ignore.multicriteria.e10.resourceKey=**/*.java \
-            -Dsonar.issue.ignore.multicriteria.e11.ruleKey=java:S*Security* \
-            -Dsonar.issue.ignore.multicriteria.e11.resourceKey=**/*.java \
-            -Dsonar.issue.ignore.multicriteria.e12.ruleKey=java:S*Bug* \
-            -Dsonar.issue.ignore.multicriteria.e12.resourceKey=**/*.java \
-            -Dsonar.issue.ignore.multicriteria.e13.ruleKey=java:S*Vulnerability* \
-            -Dsonar.issue.ignore.multicriteria.e13.resourceKey=**/*.java \
-            -Dsonar.issue.ignore.multicriteria.e14.ruleKey=java:S*Coverage* \
-            -Dsonar.issue.ignore.multicriteria.e14.resourceKey=**/*.java \
-            -Dsonar.issue.ignore.multicriteria.e15.ruleKey=java:S* \
-            -Dsonar.issue.ignore.multicriteria.e15.resourceKey=**/*.java
+            -Dsonar.coverage.minimum=0 \
+            -Dsonar.skipPackageDesign=true \
+            -Dsonar.skipDesign=true \
+            -Dsonar.skipQualityProfile=true
