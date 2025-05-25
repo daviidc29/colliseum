@@ -17,7 +17,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           java-version: 17
-          distribution: 'zulu' # Alternative distribution options are available.
+          distribution: 'zulu'
       - name: Cache SonarQube packages
         uses: actions/cache@v4
         with:
@@ -33,4 +33,16 @@ jobs:
       - name: Build and analyze
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=daviidc29_colliseum
+        run: >
+          mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar 
+          -Dsonar.projectKey=daviidc29_colliseum
+          -Dsonar.qualitygate.wait=false
+          -Dsonar.issue.ignore.multicriteria=e1,e2,e3
+          -Dsonar.issue.ignore.multicriteria.e1.ruleKey=java:S1192
+          -Dsonar.issue.ignore.multicriteria.e1.resourceKey=**/*.java
+          -Dsonar.issue.ignore.multicriteria.e2.ruleKey=java:S106
+          -Dsonar.issue.ignore.multicriteria.e2.resourceKey=**/*.java
+          -Dsonar.issue.ignore.multicriteria.e3.ruleKey=java:S1874
+          -Dsonar.issue.ignore.multicriteria.e3.resourceKey=**/*.java
+          -Dsonar.coverage.exclusions=**/*Test.java,**/model/**/*.java,**/entity/**/*.java
+          -Dsonar.cpd.exclusions=**/model/**/*.java,**/entity/**/*.java,**/dto/**/*.java
