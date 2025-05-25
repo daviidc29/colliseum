@@ -60,7 +60,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String userName = jwt.getClaim("userName").asString();
             String email = jwt.getClaim("email").asString();
             String name = jwt.getClaim("name").asString();
-            String role = jwt.getClaim("role").asString().toUpperCase();
+            String role = jwt.getClaim("role").asString();
 
             request.setAttribute("id", id);
             request.setAttribute("userName", userName);
