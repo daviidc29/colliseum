@@ -1,6 +1,5 @@
 package edu.eci.cvds.proyect.coliseum.persistency.config;
 
-
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -27,27 +26,24 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-            .csrf(csrf -> csrf.disable())
-            .authorizeHttpRequests(authz -> authz
-            .requestMatchers(
-               "/swagger-ui/**", "/v3/api-docs/**", "/swagger-resources/**", "/webjars/**",
-               "/authentication/login" // <-- AÑADE ESTO
-            ).permitAll()
-            .requestMatchers("/Article", "/Article/**").hasAnyRole("ADMIN")
-            .requestMatchers("/LoanArticle", "/LoanArticle/**").hasAnyRole("ADMIN", "STUDENT", "TEACHER")
-            .anyRequest().authenticated()
-
-            .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-
-            .addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .csrf(csrf -> csrf.disable())
+                .authorizeHttpRequests(authz -> authz
+                        .requestMatchers(
+                                "/swagger-ui/**", "/v3/api-docs/**", "/swagger-resources/**", "/webjars/**",
+                                "/authentication/login" // <-- AÑADE ESTO
+                        ).permitAll()
+                        .requestMatchers("/Article", "/Article/**").hasAnyRole("ADMIN")
+                        .requestMatchers("/LoanArticle", "/LoanArticle/**").hasAnyRole("ADMIN", "STUDENT", "TEACHER")
+                        .anyRequest().authenticated()
+                )
+                .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
 
-
-
-   @Bean
+    @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         String localFrontendUrl = "http://localhost:3000";
