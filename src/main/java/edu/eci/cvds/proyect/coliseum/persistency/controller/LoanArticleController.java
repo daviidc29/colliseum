@@ -1145,25 +1145,104 @@ public class LoanArticleController {
                     )
             }
     )
+
+
     public ResponseEntity<Object> update(
             @PathVariable String id,
             @RequestBody Map<String, Object> updates,
             @RequestParam(value = "startTime", required = false) String startTime,
             @RequestParam(value = "endTime", required = false) String endTime) {
 
-        logger.info("Actualizando préstamo con ID: {}, campos: {}", id, updates.keySet());
+        logger.info("Actualizando préstamo con ID o Usuario: {}, campos: {}", id, updates.keySet());
         try {
+            // Determinar si el ID proporcionado es un ID de préstamo o un ID de usuario
+            String loanId = id;
+            LoanArticle loanArticle = null;
+
+            // Verificar si es un ID de usuario (formato U-xxx o simplemente numérico)
+            if (id.startsWith("U-") || id.matches("\\d+")) {
+                logger.info("Se proporcionó un ID de usuario: {}. Buscando préstamos activos del usuario.", id);
+
+                // Buscar préstamos del usuario
+                List<LoanArticle> userLoans = loanArticleService.getLoansByUserReport(id);
+
+                if (userLoans.isEmpty()) {
+                    throw new LoanException.LoanExceptionEstudianteHasNotPrestamo(
+                            "El usuario " + id + " no tiene ningún préstamo registrado.");
+                }
+
+                // Filtrar solo préstamos activos ("Prestado")
+                List<LoanArticle> activeLoans = userLoans.stream()
+                        .filter(loan -> "Prestado".equals(loan.getLoanStatus()))
+                        .collect(Collectors.toList());
+
+                if (activeLoans.isEmpty()) {
+                    throw new LoanException.LoanExceptionEstudianteHasNotPrestamo(
+                            "El usuario " + id + " no tiene préstamos activos para devolver.");
+                }
+
+                // Si hay múltiples préstamos activos, podemos:
+                // 1. Usar el más reciente (por fecha de préstamo)
+                // 2. Rechazar la operación y pedir un ID específico
+
+                // Opción 1: Usar el préstamo más reciente
+                loanArticle = activeLoans.stream()
+                        .max(Comparator.comparing(LoanArticle::getCreationDate))
+                        .orElseThrow(() -> new LoanException("Error al determinar el préstamo más reciente"));
+
+                loanId = loanArticle.getId();
+                logger.info("Se encontró el préstamo activo más reciente: {} para el usuario: {}", loanId, id);
+            } else {
+                // Es un ID de préstamo, verificar si existe
+                loanArticle = loanArticleService.getLoanById(loanId);
+            }
+
             // Verificar si es una devolución completa
+            boolean isDevolving = false;
+
+            // Verificar si se está devolviendo explícitamente
             if (updates.containsKey("devolver") && Boolean.TRUE.equals(updates.get("devolver"))) {
-                loanArticleService.devolverLoan(id);
-                LoanArticle updatedLoanArticle = loanArticleService.getLoanById(id);
-                return new ResponseEntity<>(updatedLoanArticle, HttpStatus.OK);
+                isDevolving = true;
+            }
+            // O si está cambiando el estado a "Devuelto"
+            else if (updates.containsKey("estado") && "Devuelto".equals(updates.get("estado"))) {
+                isDevolving = true;
+            }
+            else if (updates.containsKey("loanStatus") && "Devuelto".equals(updates.get("loanStatus"))) {
+                isDevolving = true;
+            }
+
+            // Si es una devolución, actualizar el registro de devolución y procesar
+            if (isDevolving) {
+                // Generar el registro de devolución con detalles de los artículos
+                String devolutionRegister = generateDevolutionRegister(loanArticle);
+
+                // Si ya hay un registro de devolución, concatenarlo
+                if (loanArticle.getDevolutionRsegister() != null && !loanArticle.getDevolutionRsegister().isEmpty()) {
+                    devolutionRegister = loanArticle.getDevolutionRsegister() + "\n\n" + devolutionRegister;
+                }
+
+                // Añadir el registro de devolución a las actualizaciones
+                updates.put("devolutionRsegister", devolutionRegister);
+
+                // Usar el método de devolución si se usa la propiedad "devolver"
+                if (updates.containsKey("devolver") && Boolean.TRUE.equals(updates.get("devolver"))) {
+                    loanArticleService.devolverLoan(loanId);
+                    LoanArticle updatedLoanArticle = loanArticleService.getLoanById(loanId);
+                    return new ResponseEntity<>(updatedLoanArticle, HttpStatus.OK);
+                }
+                // Si se cambia el estado directamente, asegurarse de que se procese como devolución
+                else {
+                    updates.put("loanStatus", "Devuelto");
+                    // La fecha de devolución debería ser hoy si no se especifica
+                    if (!updates.containsKey("devolutionDate")) {
+                        updates.put("devolutionDate", LocalDate.now());
+                    }
+                }
             }
 
             // Actualizar información de horas si se proporciona
             if (startTime != null || endTime != null) {
-                LoanArticle loanArticle = loanArticleService.getLoanById(id);
-
                 // Obtener valores actuales de hora
                 LocalTime currentStart = loanArticle.getStartTime();
                 LocalTime currentEnd = loanArticle.getEndTime();
@@ -1237,17 +1316,17 @@ public class LoanArticleController {
             Map<String, String> articulosUpdate = null;
             if (updates.containsKey("articulos")) {
                 articulosUpdate = extractArticulosMap(updates.get("articulos"));
-                loanArticleService.updateArticlesStatus(id, articulosUpdate);
+                loanArticleService.updateArticlesStatus(loanId, articulosUpdate);
                 updates.remove("articulos");
             }
 
             // Actualizar campos generales del préstamo
             if (!updates.isEmpty()) {
-                loanArticleService.updateLoan(id, updates);
+                loanArticleService.updateLoan(loanId, updates);
             }
 
             // Devolver el préstamo actualizado
-            LoanArticle updatedLoanArticle = loanArticleService.getLoanById(id);
+            LoanArticle updatedLoanArticle = loanArticleService.getLoanById(loanId);
             return new ResponseEntity<>(updatedLoanArticle, HttpStatus.OK);
 
         } catch (LoanException e) {
@@ -1269,6 +1348,46 @@ public class LoanArticleController {
             errorResponse.put(MESSAGE_KEY, "Error interno del servidor");
             return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
         }
+    }
+
+    /**
+     * Genera el registro de devolución con detalles de los artículos
+     */
+    private String generateDevolutionRegister(LoanArticle loanArticle) {
+        LocalDateTime now = LocalDateTime.now();
+        DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        String timestamp = now.format(dateFormatter);
+
+        StringBuilder register = new StringBuilder();
+        register.append("Devolución realizada el ").append(timestamp).append("\n");
+        register.append("Usuario: ").append(loanArticle.getNameUser()).append(" (").append(loanArticle.getUserId()).append(")\n");
+
+        // Obtener detalles de los artículos
+        List<Article> articles = articleRepository.findAllById(loanArticle.getArticleIds());
+        if (!articles.isEmpty()) {
+            register.append("Artículos devueltos:\n");
+            for (Article article : articles) {
+                register.append("- ID: ").append(article.getId())
+                        .append(", Nombre: ").append(article.getName())
+                        .append(", Estado: ").append(loanArticle.getEquipmentStatus())
+                        .append("\n");
+            }
+        } else {
+            register.append("No se encontraron detalles de los artículos.\n");
+        }
+
+        // Incluir información de horas si es préstamo por horas
+        if (loanArticle.getStartTime() != null && loanArticle.getEndTime() != null) {
+            register.append("Préstamo por horas: ")
+                    .append(loanArticle.getStartTime().format(DateTimeFormatter.ofPattern("HH:mm")))
+                    .append(" - ")
+                    .append(loanArticle.getEndTime().format(DateTimeFormatter.ofPattern("HH:mm")))
+                    .append("\n");
+        }
+
+        register.append("Operador: ").append("Juan-cely-l");
+
+        return register.toString();
     }
 
     @DeleteMapping("/{id}")

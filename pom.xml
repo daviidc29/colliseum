@@ -102,6 +102,23 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>com.itextpdf</groupId>
+			<artifactId>itext7-core</artifactId>
+			<version>8.0.2</version>
+			<type>pom</type>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.poi</groupId>
+			<artifactId>poi-ooxml</artifactId>
+			<version>5.2.3</version>
+		</dependency>
+		<dependency>
+			<groupId>jakarta.persistence</groupId>
+			<artifactId>jakarta.persistence-api</artifactId>
+			<version>3.1.0</version>
+		</dependency>
+
 
 
 
@@ -137,6 +154,13 @@
 						<exclude>/configurators/</exclude>
 						<exclude>edu/eci/cvds/proyect/coliseum/persistency/security/**</exclude>
 						<exclude>edu/eci/cvds/proyect/coliseum/persistency/Exception/**</exclude>
+						<exclude>edu/eci/cvds/proyect/coliseum/persistency/config/**</exclude>
+						<exclude>edu/eci/cvds/proyect/coliseum/persistency/entity/ArticleLoanStats.class</exclude>
+						<exclude>edu/eci/cvds/proyect/coliseum/persistency/service/ArticleFileGenerationService.class</exclude>
+						<exclude>edu/eci/cvds/proyect/coliseum/persistency/controller/ArticleController.getArticleLoanStats*</exclude>
+						<exclude>edu/eci/cvds/proyect/coliseum/persistency/controller/ArticleController.getStatsPdf*</exclude>
+						<exclude>edu/eci/cvds/proyect/coliseum/persistency/controller/ArticleController.getStatsExcel*</exclude>
+
 					</excludes>
 					</configuration>
 				</execution>

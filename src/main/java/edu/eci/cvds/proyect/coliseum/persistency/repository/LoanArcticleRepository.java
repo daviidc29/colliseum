@@ -14,6 +14,14 @@ public interface LoanArcticleRepository extends MongoRepository<LoanArticle, Str
     List<LoanArticle> findByLoanStatus(String loanStatus);
 
     List<LoanArticle> findByUserId(String userId);
+    // Método añadido para buscar préstamos por userId y estado
+    List<LoanArticle> findByUserIdAndLoanStatus(String userId, String loanStatus);
+
+    // Método opcional para verificar cualquier préstamo no devuelto (Prestado o Vencido)
+    @Query("{'userId': ?0, 'loanStatus': {$in: ['Prestado', 'Vencido']}}")
+    List<LoanArticle> findActiveLoans(String userId);
+
+
 
     @Query("{ 'loanStatus' : ?0, $or: [ { $and: [ { 'loanDate' : { $lte: ?2 } }, { 'devolutionDate' : { $gte: ?1 } } ] }, { $and: [ { 'loanDate' : { $lte: ?2 } }, { 'devolutionDate' : null } ] } ] }")
     List<LoanArticle> findOverlappingLoans(String loanStatus, LocalDate startDate, LocalDate endDate);

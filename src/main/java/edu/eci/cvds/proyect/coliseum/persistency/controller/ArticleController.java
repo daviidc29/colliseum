@@ -1,12 +1,17 @@
 package edu.eci.cvds.proyect.coliseum.persistency.controller;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.io.IOException;
+import java.time.LocalDateTime;
+import java.util.*;
 
+import edu.eci.cvds.proyect.coliseum.persistency.entity.ArticleLoanStats;
+import edu.eci.cvds.proyect.coliseum.persistency.entity.LoanArticle;
+import edu.eci.cvds.proyect.coliseum.persistency.repository.ArticleLoanStatsRepository;
+import edu.eci.cvds.proyect.coliseum.persistency.service.ArticleFileGenerationService;
+import edu.eci.cvds.proyect.coliseum.persistency.service.LoanArticleService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -34,7 +39,6 @@ import lombok.extern.slf4j.Slf4j;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import java.util.Collections;
 
 @RestController
 @RequestMapping("/Article")
@@ -44,14 +48,20 @@ public class ArticleController {
      
     private ArticleService articleService;
     private AlertRepository alertRepository;
+    private LoanArticleService loanArticleService;
+    private ArticleFileGenerationService fileGenerationService;
+    private ArticleLoanStatsRepository statsRepository;
     private static final String ERROR_KEY = "Error";
     private static final String MESSAGE_KEY = "Message";
     private static final Logger logger = LoggerFactory.getLogger(ArticleController.class);
 
     @Autowired
-    public ArticleController(ArticleService articleService, AlertRepository alertRepository) {
+    public ArticleController(ArticleService articleService, AlertRepository alertRepository, LoanArticleService loanArticleService,ArticleFileGenerationService fileGenerationService,ArticleLoanStatsRepository statsRepository)  {
         this.articleService = articleService;
         this.alertRepository = alertRepository;
+        this.loanArticleService = loanArticleService;
+        this.fileGenerationService=fileGenerationService;
+        this.statsRepository=statsRepository;
     }
 
     @GetMapping
@@ -486,6 +496,286 @@ public class ArticleController {
             errorResponse.put("Error ", "Error al obtener las alertas");
             errorResponse.put("Message ", e.getMessage());
             return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    @GetMapping("/stats")
+    @Operation(
+            summary = "Estadísticas de préstamos por artículo",
+            description = "Devuelve un listado de artículos con el número de veces que cada uno ha sido prestado. " +
+                    "También genera informes en PDF y Excel que pueden ser descargados.",
+            responses = {
+                    @ApiResponse(
+                            responseCode = "200",
+                            description = "Estadísticas obtenidas exitosamente",
+                            content = @Content(
+                                    mediaType = "application/json",
+                                    examples = @ExampleObject(
+                                            value = """
+                    {
+                        "totalArticulos": 3,
+                        "estadisticas": [
+                            {
+                                "id": 1,
+                                "name": "Balon",
+                                "description": "Balon Golty",
+                                "articleStatus": "Disponible",
+                                "imageUrl": "/images/Balon.png",
+                                "vecesPrestado": 12
+                            },
+                            {
+                                "id": 2,
+                                "name": "Raqueta",
+                                "description": "Raqueta de ping pong",
+                                "articleStatus": "Disponible",
+                                "imageUrl": "/images/Raqueta.png",
+                                "vecesPrestado": 5
+                            },
+                            {
+                                "id": 3,
+                                "name": "Lazo",
+                                "description": "Lazo para saltar",
+                                "articleStatus": "Disponible", 
+                                "imageUrl": "/images/lazo.png",
+                                "vecesPrestado": 8
+                            }
+                        ],
+                        "reportId": "65a1f3e8d4e8b10c9c8b4567",
+                        "downloadLinks": {
+                            "pdf": "/Article/stats/pdf/65a1f3e8d4e8b10c9c8b4567",
+                            "excel": "/Article/stats/excel/65a1f3e8d4e8b10c9c8b4567"
+                        }
+                    }
+                    """
+                                    )
+                            )
+                    ),
+                    @ApiResponse(
+                            responseCode = "500",
+                            description = "Error interno del servidor",
+                            content = @Content(
+                                    mediaType = "application/json",
+                                    examples = @ExampleObject(
+                                            value = """
+                    {
+                        "Error": "Error al obtener estadísticas de préstamos",
+                        "Message": "Error interno del servidor"
+                    }
+                    """
+                                    )
+                            )
+                    )
+            }
+    )
+    public ResponseEntity<?> getArticleLoanStats(
+            @RequestParam(name = "username", required = false) String username) {
+        try {
+            logger.info("Obteniendo estadísticas de préstamos por artículo");
+
+            // Si no se proporciona nombre de usuario, usar un valor por defecto
+            String reportGeneratedBy = (username != null && !username.isEmpty())
+                    ? username : "Juan-cely-l"; // Usando el nombre de usuario por defecto o el proporcionado
+
+            // Obtener todos los artículos
+            List<Article> articles = articleService.getAll();
+
+            // Obtener todos los préstamos
+            List<LoanArticle> allLoans = loanArticleService.getLoans(null);
+
+            // Calcular cuántas veces se prestó cada artículo
+            Map<Integer, Long> loanCountByArticleId = new HashMap<>();
+
+            for (LoanArticle loan : allLoans) {
+                if (loan.getArticleIds() != null) {
+                    for (Integer articleId : loan.getArticleIds()) {
+                        loanCountByArticleId.put(articleId,
+                                loanCountByArticleId.getOrDefault(articleId, 0L) + 1);
+                    }
+                }
+            }
+
+            // Crear respuesta con estadísticas
+            List<Map<String, Object>> stats = new ArrayList<>();
+            for (Article article : articles) {
+                Map<String, Object> articleStat = new HashMap<>();
+                articleStat.put("id", article.getId());
+                articleStat.put("name", article.getName());
+                articleStat.put("description", article.getDescription());
+                articleStat.put("articleStatus", article.getArticleStatus());
+                articleStat.put("imageUrl", article.getImageUrl());
+                articleStat.put("vecesPrestado", loanCountByArticleId.getOrDefault(article.getId(), 0L));
+
+                stats.add(articleStat);
+            }
+
+            // Ordenar por número de préstamos (descendente)
+            stats.sort((a, b) -> Long.compare(
+                    (Long)b.get("vecesPrestado"),
+                    (Long)a.get("vecesPrestado")
+            ));
+
+            // Crear y guardar reporte de estadísticas
+            ArticleLoanStats statsReport = new ArticleLoanStats();
+            statsReport.setTitle("Estadísticas de Préstamos de Artículos");
+            statsReport.setTotalArticles(articles.size());
+            statsReport.setGenerationDate(LocalDateTime.now());
+            statsReport.setGeneratedBy(reportGeneratedBy);
+            statsReport.setStatistics(stats);
+
+            try {
+                // Generar archivos PDF y Excel
+                byte[] pdfContent = fileGenerationService.generateArticleStatsPdf(statsReport);
+                byte[] excelContent = fileGenerationService.generateArticleStatsExcel(statsReport);
+
+                // Guardar archivos en el reporte
+                statsReport.setPdfFile(pdfContent);
+                statsReport.setExcelFile(excelContent);
+
+                // Guardar reporte en base de datos
+                statsReport = statsRepository.save(statsReport);
+
+            } catch (IOException e) {
+                logger.error("Error al generar archivos de reporte: {}", e.getMessage(), e);
+                // Continuar con la respuesta JSON incluso si los archivos no se generaron
+            }
+
+            // Armar respuesta final
+            Map<String, Object> response = new HashMap<>();
+            response.put("totalArticulos", articles.size());
+            response.put("estadisticas", stats);
+
+            // Si se guardó el reporte, incluir ID y enlaces de descarga
+            if (statsReport.getId() != null) {
+                response.put("reportId", statsReport.getId());
+
+                Map<String, String> downloadLinks = new HashMap<>();
+                downloadLinks.put("pdf", "/Article/stats/pdf/" + statsReport.getId());
+                downloadLinks.put("excel", "/Article/stats/excel/" + statsReport.getId());
+                response.put("downloadLinks", downloadLinks);
+            }
+
+            return new ResponseEntity<>(response, HttpStatus.OK);
+
+        } catch (Exception e) {
+            logger.error("Error al obtener estadísticas de préstamos: {}", e.getMessage(), e);
+            Map<String, String> errorResponse = new HashMap<>();
+            errorResponse.put(ERROR_KEY, "Error al obtener estadísticas de préstamos");
+            errorResponse.put(MESSAGE_KEY, e.getMessage());
+            return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    @GetMapping("/stats/pdf/{id}")
+    @Operation(
+            summary = "Descargar reporte de estadísticas en formato PDF",
+            description = "Permite descargar un archivo PDF con el reporte de estadísticas de préstamos",
+            parameters = {
+                    @Parameter(
+                            name = "id",
+                            description = "ID del reporte de estadísticas",
+                            required = true,
+                            example = "65a1f3e8d4e8b10c9c8b4567"
+                    )
+            },
+            responses = {
+                    @ApiResponse(
+                            responseCode = "200",
+                            description = "PDF descargado exitosamente",
+                            content = @Content(mediaType = "application/pdf")
+                    ),
+                    @ApiResponse(
+                            responseCode = "404",
+                            description = "Reporte no encontrado",
+                            content = @Content(
+                                    mediaType = "application/json",
+                                    examples = @ExampleObject(
+                                            value = """
+                    {
+                        "Error": "Reporte no encontrado",
+                        "Message": "No existe un reporte con el ID especificado"
+                    }
+                    """
+                                    )
+                            )
+                    )
+            }
+    )
+    public ResponseEntity<byte[]> getStatsPdf(@PathVariable String id) {
+        try {
+            ArticleLoanStats stats = statsRepository.findById(id)
+                    .orElseThrow(() -> new NoSuchElementException("Reporte no encontrado con ID: " + id));
+
+            if (stats.getPdfFile() == null || stats.getPdfFile().length == 0) {
+                throw new IllegalStateException("El archivo PDF no está disponible para este reporte");
+            }
+
+            return ResponseEntity.ok()
+                    .header("Content-Disposition", "attachment; filename=articulos_prestamos_stats_" + id + ".pdf")
+                    .contentType(MediaType.APPLICATION_PDF)
+                    .body(stats.getPdfFile());
+        } catch (NoSuchElementException e) {
+            logger.error("Reporte no encontrado: {}", e.getMessage());
+            return ResponseEntity.notFound().build();
+        } catch (Exception e) {
+            logger.error("Error al obtener archivo PDF: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    @GetMapping("/stats/excel/{id}")
+    @Operation(
+            summary = "Descargar reporte de estadísticas en formato Excel",
+            description = "Permite descargar un archivo Excel con el reporte de estadísticas de préstamos",
+            parameters = {
+                    @Parameter(
+                            name = "id",
+                            description = "ID del reporte de estadísticas",
+                            required = true,
+                            example = "65a1f3e8d4e8b10c9c8b4567"
+                    )
+            },
+            responses = {
+                    @ApiResponse(
+                            responseCode = "200",
+                            description = "Excel descargado exitosamente",
+                            content = @Content(mediaType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                    ),
+                    @ApiResponse(
+                            responseCode = "404",
+                            description = "Reporte no encontrado",
+                            content = @Content(
+                                    mediaType = "application/json",
+                                    examples = @ExampleObject(
+                                            value = """
+                    {
+                        "Error": "Reporte no encontrado",
+                        "Message": "No existe un reporte con el ID especificado"
+                    }
+                    """
+                                    )
+                            )
+                    )
+            }
+    )
+    public ResponseEntity<byte[]> getStatsExcel(@PathVariable String id) {
+        try {
+            ArticleLoanStats stats = statsRepository.findById(id)
+                    .orElseThrow(() -> new NoSuchElementException("Reporte no encontrado con ID: " + id));
+
+            if (stats.getExcelFile() == null || stats.getExcelFile().length == 0) {
+                throw new IllegalStateException("El archivo Excel no está disponible para este reporte");
+            }
+
+            return ResponseEntity.ok()
+                    .header("Content-Disposition", "attachment; filename=articulos_prestamos_stats_" + id + ".xlsx")
+                    .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                    .body(stats.getExcelFile());
+        } catch (NoSuchElementException e) {
+            logger.error("Reporte no encontrado: {}", e.getMessage());
+            return ResponseEntity.notFound().build();
+        } catch (Exception e) {
+            logger.error("Error al obtener archivo Excel: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError().build();
         }
     }
 

@@ -52,6 +52,7 @@ public class LoanArticle {
     private LocalTime endTime;
 
     private LocalDate devolutionDate;
+
     // Método de conveniencia para obtener la duración del préstamo
     public Duration getDuration() {
         if (startTime != null && endTime != null) {
@@ -71,11 +72,24 @@ public class LoanArticle {
     @Size(max=500,message="El motivo de la devolucion no puede tener mas de 500 caracteres")
     private String devolutionRsegister;
 
-
+    // Método actualizado para obtener el tiempo de préstamo
     public long getLoanTime() {
-        if(loanDate!=null&&devolutionDate!=null){
-           return java.time.temporal.ChronoUnit.DAYS.between(loanDate, devolutionDate);
+        // Si hay startTime y endTime, calculamos el tiempo en horas
+        if (startTime != null && endTime != null) {
+            Duration duration = getDuration();
+            return duration == null ? 0 : duration.toHours();
         }
+
+        // Si no hay horas especificadas pero hay fechas, calculamos en días
+        if (loanDate != null && devolutionDate != null) {
+            return java.time.temporal.ChronoUnit.DAYS.between(loanDate, devolutionDate);
+        }
+
         return 0;
+    }
+
+    // Método auxiliar para indicar si es un préstamo por horas
+    public boolean isHourlyLoan() {
+        return startTime != null && endTime != null;
     }
 }

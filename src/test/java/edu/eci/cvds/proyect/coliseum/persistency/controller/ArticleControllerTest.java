@@ -1,25 +1,31 @@
 package edu.eci.cvds.proyect.coliseum.persistency.controller;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import edu.eci.cvds.proyect.coliseum.persistency.dto.ArticleDto;
 import edu.eci.cvds.proyect.coliseum.persistency.entity.Alert;
 import edu.eci.cvds.proyect.coliseum.persistency.entity.Article;
+import edu.eci.cvds.proyect.coliseum.persistency.entity.ArticleLoanStats;
+import edu.eci.cvds.proyect.coliseum.persistency.entity.LoanArticle;
 import edu.eci.cvds.proyect.coliseum.persistency.repository.AlertRepository;
+import edu.eci.cvds.proyect.coliseum.persistency.repository.ArticleLoanStatsRepository;
+import edu.eci.cvds.proyect.coliseum.persistency.service.ArticleFileGenerationService;
 import edu.eci.cvds.proyect.coliseum.persistency.service.ArticleService;
+import edu.eci.cvds.proyect.coliseum.persistency.service.LoanArticleService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 
+import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -311,4 +317,398 @@ class ArticleControllerTest {
         assertEquals("Error al obtener las alertas", body.get("Error "));
         verify(alertRepository, times(1)).findAll();
     }
+
+    @Test
+    void testGetArticleLoanStats_Success() throws IOException {
+        // Arrange
+        ArticleService articleService = mock(ArticleService.class);
+        AlertRepository alertRepository = mock(AlertRepository.class);
+        LoanArticleService loanArticleService = mock(LoanArticleService.class);
+        ArticleFileGenerationService fileGenerationService = mock(ArticleFileGenerationService.class);
+        ArticleLoanStatsRepository statsRepository = mock(ArticleLoanStatsRepository.class);
+
+        ArticleController controller = new ArticleController(
+                articleService, alertRepository, loanArticleService,
+                fileGenerationService, statsRepository);
+
+        // Crear datos de prueba
+        List<Article> articles = Arrays.asList(
+                new Article(1, "Balon", "Disponible", "Desc1", "/images/balon.png"),
+                new Article(2, "Raqueta", "Disponible", "Desc2", "/images/raqueta.png")
+        );
+
+        // Crear préstamos con referencias a los artículos
+        List<LoanArticle> loans = new ArrayList<>();
+        LoanArticle loan1 = new LoanArticle();
+        loan1.setId("loan1");
+        loan1.setArticleIds(List.of(1, 2));
+        loans.add(loan1);
+
+        LoanArticle loan2 = new LoanArticle();
+        loan2.setId("loan2");
+        loan2.setArticleIds(List.of(1));
+        loans.add(loan2);
+
+        // Configurar mocks
+        when(articleService.getAll()).thenReturn(articles);
+        when(loanArticleService.getLoans(null)).thenReturn(loans);
+
+        // Capturar el objeto ArticleLoanStats que se pasa al file generation service
+        ArgumentCaptor<ArticleLoanStats> statsCaptor = ArgumentCaptor.forClass(ArticleLoanStats.class);
+        when(fileGenerationService.generateArticleStatsPdf(statsCaptor.capture())).thenReturn(new byte[]{1, 2, 3});
+        when(fileGenerationService.generateArticleStatsExcel(any(ArticleLoanStats.class))).thenReturn(new byte[]{4, 5, 6});
+
+        // Capturar el objeto que se guarda en el repositorio
+        ArgumentCaptor<ArticleLoanStats> savedStatsCaptor = ArgumentCaptor.forClass(ArticleLoanStats.class);
+        when(statsRepository.save(savedStatsCaptor.capture())).thenAnswer(invocation -> {
+            ArticleLoanStats stats = invocation.getArgument(0);
+            stats.setId("report123");
+            return stats;
+        });
+
+        // Act
+        ResponseEntity<?> response = controller.getArticleLoanStats("testuser");
+
+        // Assert
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> body = (Map<String, Object>) response.getBody();
+        assertNotNull(body);
+        assertEquals(2, body.get("totalArticulos"));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> stats = (List<Map<String, Object>>) body.get("estadisticas");
+        assertEquals(2, stats.size());
+
+        // Verificar que el primer artículo (más prestado) tiene 2 préstamos
+        assertEquals(1, stats.get(0).get("id"));
+        assertEquals("Balon", stats.get(0).get("name"));
+        assertEquals(2L, stats.get(0).get("vecesPrestado"));
+
+        // Verificar que el segundo artículo tiene 1 préstamo
+        assertEquals(2, stats.get(1).get("id"));
+        assertEquals("Raqueta", stats.get(1).get("name"));
+        assertEquals(1L, stats.get(1).get("vecesPrestado"));
+
+        // Verificar que se crearon los enlaces de descarga
+        @SuppressWarnings("unchecked")
+        Map<String, String> links = (Map<String, String>) body.get("downloadLinks");
+        assertEquals("/Article/stats/pdf/report123", links.get("pdf"));
+        assertEquals("/Article/stats/excel/report123", links.get("excel"));
+
+        // Verificar las interacciones con los servicios
+        verify(fileGenerationService).generateArticleStatsPdf(any(ArticleLoanStats.class));
+        verify(fileGenerationService).generateArticleStatsExcel(any(ArticleLoanStats.class));
+        verify(statsRepository).save(any(ArticleLoanStats.class));
+
+        // Verificar que se usó el nombre de usuario proporcionado
+        assertEquals("testuser", savedStatsCaptor.getValue().getGeneratedBy());
+    }
+
+    @Test
+    void testGetArticleLoanStats_DefaultUsername() throws IOException {
+        // Arrange
+        ArticleService articleService = mock(ArticleService.class);
+        AlertRepository alertRepository = mock(AlertRepository.class);
+        LoanArticleService loanArticleService = mock(LoanArticleService.class);
+        ArticleFileGenerationService fileGenerationService = mock(ArticleFileGenerationService.class);
+        ArticleLoanStatsRepository statsRepository = mock(ArticleLoanStatsRepository.class);
+
+        ArticleController controller = new ArticleController(
+                articleService, alertRepository, loanArticleService,
+                fileGenerationService, statsRepository);
+
+        when(articleService.getAll()).thenReturn(Collections.emptyList());
+        when(loanArticleService.getLoans(null)).thenReturn(Collections.emptyList());
+        when(fileGenerationService.generateArticleStatsPdf(any())).thenReturn(new byte[]{1, 2, 3});
+        when(fileGenerationService.generateArticleStatsExcel(any())).thenReturn(new byte[]{4, 5, 6});
+
+        ArgumentCaptor<ArticleLoanStats> statsCaptor = ArgumentCaptor.forClass(ArticleLoanStats.class);
+        when(statsRepository.save(statsCaptor.capture())).thenAnswer(invocation -> {
+            ArticleLoanStats stats = invocation.getArgument(0);
+            stats.setId("defaultReport");
+            return stats;
+        });
+
+        // Act - llamar sin nombre de usuario
+        ResponseEntity<?> response = controller.getArticleLoanStats(null);
+
+        // Assert
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("Juan-cely-l", statsCaptor.getValue().getGeneratedBy());
+    }
+
+    @Test
+    void testGetArticleLoanStats_EmptyArticleList() throws IOException {
+        // Arrange
+        ArticleService articleService = mock(ArticleService.class);
+        AlertRepository alertRepository = mock(AlertRepository.class);
+        LoanArticleService loanArticleService = mock(LoanArticleService.class);
+        ArticleFileGenerationService fileGenerationService = mock(ArticleFileGenerationService.class);
+        ArticleLoanStatsRepository statsRepository = mock(ArticleLoanStatsRepository.class);
+
+        ArticleController controller = new ArticleController(
+                articleService, alertRepository, loanArticleService,
+                fileGenerationService, statsRepository);
+
+        when(articleService.getAll()).thenReturn(Collections.emptyList());
+        when(loanArticleService.getLoans(null)).thenReturn(Collections.emptyList());
+        when(fileGenerationService.generateArticleStatsPdf(any())).thenReturn(new byte[]{1, 2, 3});
+        when(fileGenerationService.generateArticleStatsExcel(any())).thenReturn(new byte[]{4, 5, 6});
+
+        when(statsRepository.save(any())).thenAnswer(invocation -> {
+            ArticleLoanStats stats = invocation.getArgument(0);
+            stats.setId("emptyReport");
+            return stats;
+        });
+
+        // Act
+        ResponseEntity<?> response = controller.getArticleLoanStats("testuser");
+
+        // Assert
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> body = (Map<String, Object>) response.getBody();
+        assertNotNull(body);
+        assertEquals(0, body.get("totalArticulos"));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> stats = (List<Map<String, Object>>) body.get("estadisticas");
+        assertTrue(stats.isEmpty());
+    }
+
+    @Test
+    void testGetArticleLoanStats_GenerationException() throws IOException {
+        // Arrange
+        ArticleService articleService = mock(ArticleService.class);
+        AlertRepository alertRepository = mock(AlertRepository.class);
+        LoanArticleService loanArticleService = mock(LoanArticleService.class);
+        ArticleFileGenerationService fileGenerationService = mock(ArticleFileGenerationService.class);
+        ArticleLoanStatsRepository statsRepository = mock(ArticleLoanStatsRepository.class);
+
+        ArticleController controller = new ArticleController(
+                articleService, alertRepository, loanArticleService,
+                fileGenerationService, statsRepository);
+
+        List<Article> articles = Arrays.asList(new Article(1, "Balon", "Disponible", "Desc1", "/images/balon.png"));
+        when(articleService.getAll()).thenReturn(articles);
+        when(loanArticleService.getLoans(null)).thenReturn(Collections.emptyList());
+
+        // Simular error en generación de PDF
+        when(fileGenerationService.generateArticleStatsPdf(any())).thenThrow(new IOException("Error PDF"));
+
+        // Act
+        ResponseEntity<?> response = controller.getArticleLoanStats("testuser");
+
+        // Assert - el endpoint debería continuar y devolver la respuesta JSON
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> body = (Map<String, Object>) response.getBody();
+        assertNotNull(body);
+        assertEquals(1, body.get("totalArticulos"));
+
+        // No debería haberse guardado ningún reporte
+        verify(statsRepository, never()).save(any());
+    }
+
+    @Test
+    void testGetArticleLoanStats_Exception() {
+        // Arrange
+        ArticleService articleService = mock(ArticleService.class);
+        AlertRepository alertRepository = mock(AlertRepository.class);
+        LoanArticleService loanArticleService = mock(LoanArticleService.class);
+        ArticleFileGenerationService fileGenerationService = mock(ArticleFileGenerationService.class);
+        ArticleLoanStatsRepository statsRepository = mock(ArticleLoanStatsRepository.class);
+
+        ArticleController controller = new ArticleController(
+                articleService, alertRepository, loanArticleService,
+                fileGenerationService, statsRepository);
+
+        when(articleService.getAll()).thenThrow(new RuntimeException("Test exception"));
+
+        // Act
+        ResponseEntity<?> response = controller.getArticleLoanStats("testuser");
+
+        // Assert
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> body = (Map<String, Object>) response.getBody();
+        assertNotNull(body);
+        assertEquals("Error al obtener estadísticas de préstamos", body.get("Error"));
+    }
+
+    @Test
+    void testGetStatsPdf_Success() {
+        // Arrange
+        ArticleService articleService = mock(ArticleService.class);
+        AlertRepository alertRepository = mock(AlertRepository.class);
+        LoanArticleService loanArticleService = mock(LoanArticleService.class);
+        ArticleFileGenerationService fileGenerationService = mock(ArticleFileGenerationService.class);
+        ArticleLoanStatsRepository statsRepository = mock(ArticleLoanStatsRepository.class);
+
+        ArticleController controller = new ArticleController(
+                articleService, alertRepository, loanArticleService,
+                fileGenerationService, statsRepository);
+
+        String reportId = "report123";
+        byte[] pdfBytes = {1, 2, 3, 4, 5};
+
+        ArticleLoanStats stats = new ArticleLoanStats();
+        stats.setId(reportId);
+        stats.setPdfFile(pdfBytes);
+
+        when(statsRepository.findById(reportId)).thenReturn(Optional.of(stats));
+
+        // Act
+        ResponseEntity<byte[]> response = controller.getStatsPdf(reportId);
+
+        // Assert
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals(MediaType.APPLICATION_PDF, response.getHeaders().getContentType());
+        assertEquals("attachment; filename=articulos_prestamos_stats_" + reportId + ".pdf",
+                response.getHeaders().getFirst("Content-Disposition"));
+        assertArrayEquals(pdfBytes, response.getBody());
+    }
+
+    @Test
+    void testGetStatsPdf_NotFound() {
+        // Arrange
+        ArticleService articleService = mock(ArticleService.class);
+        AlertRepository alertRepository = mock(AlertRepository.class);
+        LoanArticleService loanArticleService = mock(LoanArticleService.class);
+        ArticleFileGenerationService fileGenerationService = mock(ArticleFileGenerationService.class);
+        ArticleLoanStatsRepository statsRepository = mock(ArticleLoanStatsRepository.class);
+
+        ArticleController controller = new ArticleController(
+                articleService, alertRepository, loanArticleService,
+                fileGenerationService, statsRepository);
+
+        String reportId = "nonexistent";
+        when(statsRepository.findById(reportId)).thenReturn(Optional.empty());
+
+        // Act
+        ResponseEntity<byte[]> response = controller.getStatsPdf(reportId);
+
+        // Assert
+        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
+    }
+
+    @Test
+    void testGetStatsPdf_EmptyPdfFile() {
+        // Arrange
+        ArticleService articleService = mock(ArticleService.class);
+        AlertRepository alertRepository = mock(AlertRepository.class);
+        LoanArticleService loanArticleService = mock(LoanArticleService.class);
+        ArticleFileGenerationService fileGenerationService = mock(ArticleFileGenerationService.class);
+        ArticleLoanStatsRepository statsRepository = mock(ArticleLoanStatsRepository.class);
+
+        ArticleController controller = new ArticleController(
+                articleService, alertRepository, loanArticleService,
+                fileGenerationService, statsRepository);
+
+        String reportId = "report123";
+
+        ArticleLoanStats stats = new ArticleLoanStats();
+        stats.setId(reportId);
+        stats.setPdfFile(new byte[0]); // Archivo vacío
+
+        when(statsRepository.findById(reportId)).thenReturn(Optional.of(stats));
+
+        // Act
+        ResponseEntity<byte[]> response = controller.getStatsPdf(reportId);
+
+        // Assert
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+    }
+
+    @Test
+    void testGetStatsExcel_Success() {
+        // Arrange
+        ArticleService articleService = mock(ArticleService.class);
+        AlertRepository alertRepository = mock(AlertRepository.class);
+        LoanArticleService loanArticleService = mock(LoanArticleService.class);
+        ArticleFileGenerationService fileGenerationService = mock(ArticleFileGenerationService.class);
+        ArticleLoanStatsRepository statsRepository = mock(ArticleLoanStatsRepository.class);
+
+        ArticleController controller = new ArticleController(
+                articleService, alertRepository, loanArticleService,
+                fileGenerationService, statsRepository);
+
+        String reportId = "report123";
+        byte[] excelBytes = {1, 2, 3, 4, 5};
+
+        ArticleLoanStats stats = new ArticleLoanStats();
+        stats.setId(reportId);
+        stats.setExcelFile(excelBytes);
+
+        when(statsRepository.findById(reportId)).thenReturn(Optional.of(stats));
+
+        // Act
+        ResponseEntity<byte[]> response = controller.getStatsExcel(reportId);
+
+        // Assert
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+                response.getHeaders().getContentType());
+        assertEquals("attachment; filename=articulos_prestamos_stats_" + reportId + ".xlsx",
+                response.getHeaders().getFirst("Content-Disposition"));
+        assertArrayEquals(excelBytes, response.getBody());
+    }
+
+    @Test
+    void testGetStatsExcel_NotFound() {
+        // Arrange
+        ArticleService articleService = mock(ArticleService.class);
+        AlertRepository alertRepository = mock(AlertRepository.class);
+        LoanArticleService loanArticleService = mock(LoanArticleService.class);
+        ArticleFileGenerationService fileGenerationService = mock(ArticleFileGenerationService.class);
+        ArticleLoanStatsRepository statsRepository = mock(ArticleLoanStatsRepository.class);
+
+        ArticleController controller = new ArticleController(
+                articleService, alertRepository, loanArticleService,
+                fileGenerationService, statsRepository);
+
+        String reportId = "nonexistent";
+        when(statsRepository.findById(reportId)).thenReturn(Optional.empty());
+
+        // Act
+        ResponseEntity<byte[]> response = controller.getStatsExcel(reportId);
+
+        // Assert
+        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
+    }
+
+    @Test
+    void testGetStatsExcel_EmptyExcelFile() {
+        // Arrange
+        ArticleService articleService = mock(ArticleService.class);
+        AlertRepository alertRepository = mock(AlertRepository.class);
+        LoanArticleService loanArticleService = mock(LoanArticleService.class);
+        ArticleFileGenerationService fileGenerationService = mock(ArticleFileGenerationService.class);
+        ArticleLoanStatsRepository statsRepository = mock(ArticleLoanStatsRepository.class);
+
+        ArticleController controller = new ArticleController(
+                articleService, alertRepository, loanArticleService,
+                fileGenerationService, statsRepository);
+
+        String reportId = "report123";
+
+        ArticleLoanStats stats = new ArticleLoanStats();
+        stats.setId(reportId);
+        stats.setExcelFile(new byte[0]); // Archivo vacío
+
+        when(statsRepository.findById(reportId)).thenReturn(Optional.of(stats));
+
+        // Act
+        ResponseEntity<byte[]> response = controller.getStatsExcel(reportId);
+
+        // Assert
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+    }
+
+
 }

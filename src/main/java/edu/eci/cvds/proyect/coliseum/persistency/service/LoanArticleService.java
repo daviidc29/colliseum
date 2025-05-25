@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -98,9 +99,47 @@ public class LoanArticleService {
         this.mongoTemplate = mongoTemplate;
     }
 
+
     @Transactional
     public LoanArticle createLoan(LoanArticle loanArticle) {
         Objects.requireNonNull(loanArticle, "loan must not be null");
+        Objects.requireNonNull(loanArticle.getUserId(), "userId must not be null");
+
+        // Validar si el usuario ya tiene préstamos activos (en estado Prestado o Vencido)
+        List<LoanArticle> activeLoans = loanArcticleRepository.findActiveLoans(loanArticle.getUserId());
+
+        if (!activeLoans.isEmpty()) {
+            LoanArticle activeLoan = activeLoans.get(0);
+            String estado = activeLoan.getLoanStatus();
+
+            StringBuilder mensajeError = new StringBuilder()
+                    .append("El usuario '")
+                    .append(loanArticle.getUserId())
+                    .append("' (")
+                    .append(loanArticle.getNameUser())
+                    .append(") ya tiene un préstamo ");
+
+            if ("Prestado".equals(estado)) {
+                mensajeError.append("activo que debe devolver antes de solicitar uno nuevo.");
+            } else if ("Vencido".equals(estado)) {
+                mensajeError.append("vencido que debe regularizar antes de solicitar uno nuevo.");
+            } else {
+                mensajeError.append("en estado '")
+                        .append(estado)
+                        .append("' que debe resolver antes de solicitar uno nuevo.");
+            }
+
+            // Agregar información sobre el préstamo activo
+            mensajeError.append(" ID del préstamo: ")
+                    .append(activeLoan.getId());
+
+            if (activeLoan.getLoanDate() != null) {
+                mensajeError.append(", fecha: ")
+                        .append(activeLoan.getLoanDate());
+            }
+
+            throw new LoanException.LoanExceptionStateError(mensajeError.toString());
+        }
 
         validateArticlesForLoan(loanArticle.getArticleIds());
         configureLoanDates(loanArticle);
@@ -134,6 +173,12 @@ public class LoanArticleService {
         if (loanArticle.getLoanDate() == null) {
             loanArticle.setLoanDate(LocalDate.now());
         }
+
+        // If this is an hourly loan and no devolutionDate is set, it should be the same as loanDate
+        if (loanArticle.isHourlyLoan() && loanArticle.getDevolutionDate() == null) {
+            loanArticle.setDevolutionDate(loanArticle.getLoanDate());
+        }
+
         loanArticle.setCreationDate(LocalDateTime.now());
     }
 
@@ -169,10 +214,50 @@ public class LoanArticleService {
         loanArticle.setLoanStatus(LoanStatus.DEVUELTO.getValue());
         loanArticle.setDevolutionDate(LocalDate.now());
 
+        // Generar registro de devolución con detalles de artículos y timestamp
+        String devolutionRegister = generateDevolutionRegister(loanArticle);
+        loanArticle.setDevolutionRsegister(devolutionRegister);
+
         String newArticleStatus = determineArticleStatus(loanArticle.getEquipmentStatus());
         updateArticlesStatus(loanArticle.getArticleIds(), newArticleStatus);
 
         loanArcticleRepository.save(loanArticle);
+    }
+
+    /**
+     * Genera la descripción detallada para el registro de devolución
+     */
+    private String generateDevolutionRegister(LoanArticle loanArticle) {
+        LocalDateTime now = LocalDateTime.now();
+        DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        String timestamp = now.format(dateFormatter);
+
+        StringBuilder register = new StringBuilder();
+        register.append("Devolución realizada el ").append(timestamp).append("\n");
+
+        // Obtener detalles de los artículos
+        List<Article> articles = articleRepository.findAllById(loanArticle.getArticleIds());
+        if (!articles.isEmpty()) {
+            register.append("Artículos devueltos:\n");
+            for (Article article : articles) {
+                register.append("- ID: ").append(article.getId())
+                        .append(", Nombre: ").append(article.getName())
+                        .append(", Estado: ").append(loanArticle.getEquipmentStatus())
+                        .append("\n");
+            }
+        } else {
+            register.append("No se encontraron detalles de los artículos.");
+        }
+
+        // Incluir información de horas si es préstamo por horas
+        if (loanArticle.getStartTime() != null && loanArticle.getEndTime() != null) {
+            register.append("Préstamo por horas: ")
+                    .append(loanArticle.getStartTime().format(DateTimeFormatter.ofPattern("HH:mm")))
+                    .append(" - ")
+                    .append(loanArticle.getEndTime().format(DateTimeFormatter.ofPattern("HH:mm")));
+        }
+
+        return register.toString();
     }
 
     String determineArticleStatus(String equipmentStatus) {
