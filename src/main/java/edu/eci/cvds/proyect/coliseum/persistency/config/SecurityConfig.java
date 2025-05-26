@@ -33,7 +33,7 @@ public class SecurityConfig {
                                 "/swagger-ui/**", "/v3/api-docs/**", "/swagger-resources/**", "/webjars/**",
                                 "/authentication/login" // <-- AÑADE ESTO
                         ).permitAll()
-                        .requestMatchers("/Article", "/Article/**").hasAnyRole("ADMIN")
+                        .requestMatchers("/Article", "/Article/**").hasAnyRole("ADMIN", "STUDENT", "TEACHER")
                         .requestMatchers("/LoanArticle", "/LoanArticle/**").hasAnyRole("ADMIN", "STUDENT", "TEACHER")
                         .anyRequest().authenticated()
                 )
